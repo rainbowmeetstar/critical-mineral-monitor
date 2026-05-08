@@ -49,4 +49,16 @@ export const api = {
   triggerCrawlNews: () => post('/crawl/news'),
 
   getProducerMap: () => get<ProducerCountry[]>('/map'),
+
+  exportMinerals: () => `${BASE}/export/minerals`,
+  exportPrices: (days = 30, mineralId?: number) => {
+    const p = new URLSearchParams({ days: String(days) })
+    if (mineralId) p.set('mineral_id', String(mineralId))
+    return `${BASE}/export/prices?${p}`
+  },
+  exportNews: (days = 30, category?: string) => {
+    const p = new URLSearchParams({ days: String(days) })
+    if (category) p.set('category', category)
+    return `${BASE}/export/news?${p}`
+  },
 }

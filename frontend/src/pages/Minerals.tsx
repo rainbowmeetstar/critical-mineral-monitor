@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { TrendingUp, TrendingDown, Search, Info } from 'lucide-react'
+import { TrendingUp, TrendingDown, Search, Info, Download } from 'lucide-react'
 
 const CATEGORIES = [
   { value: '', label: '全部', color: 'bg-slate-700 text-slate-300' },
@@ -91,8 +91,15 @@ export default function Minerals() {
         </div>
       </div>
 
-      <div className="text-xs text-slate-600">
-        共 {filtered.length} 种矿产
+      <div className="flex items-center justify-between text-xs text-slate-600">
+        <span>共 {filtered.length} 种矿产</span>
+        <a
+          href={api.exportMinerals()}
+          download
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" />导出 CSV
+        </a>
       </div>
 
       {isLoading ? (

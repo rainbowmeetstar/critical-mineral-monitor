@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import { format } from 'date-fns'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, Download } from 'lucide-react'
 
 const DAYS_OPTIONS = [7, 30, 90, 365]
 const CATEGORY_FILTER = [
@@ -64,7 +64,17 @@ export default function Prices() {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex items-center gap-2">
+          {selectedId && (
+            <a
+              href={api.exportPrices(days, selectedId)}
+              download
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-xs transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />导出 CSV
+            </a>
+          )}
+          <div className="flex gap-1">
           {DAYS_OPTIONS.map(d => (
             <button
               key={d}
@@ -78,6 +88,7 @@ export default function Prices() {
               {d}天
             </button>
           ))}
+          </div>
         </div>
       </div>
 

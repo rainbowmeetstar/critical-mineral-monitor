@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { formatDistanceToNow, parseISO } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { ExternalLink, Newspaper } from 'lucide-react'
+import { ExternalLink, Newspaper, Download } from 'lucide-react'
 
 const CATEGORY_OPTIONS = [
   { value: '', label: '全部类别' },
@@ -92,6 +92,15 @@ export default function News() {
             placeholder="如: Lithium"
             className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-500 outline-none focus:border-sky-500"
           />
+        </div>
+        <div className="ml-auto">
+          <a
+            href={api.exportNews(30, category || undefined)}
+            download
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-xs transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />导出 CSV
+          </a>
         </div>
       </div>
 
