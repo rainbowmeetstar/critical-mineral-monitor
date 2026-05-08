@@ -17,6 +17,6 @@ EXPOSE 80
 FROM node:20-alpine AS railway
 WORKDIR /app
 COPY --from=builder /app/dist ./dist
-COPY server.js .
+COPY server.cjs .
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "server.cjs"]
