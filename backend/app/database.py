@@ -16,6 +16,6 @@ async def get_db():
 
 
 async def init_db():
-    from .models import mineral, news  # noqa: F401 - ensure models are registered
+    from .models import mineral, news, alert  # noqa: F401 - ensure models are registered
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

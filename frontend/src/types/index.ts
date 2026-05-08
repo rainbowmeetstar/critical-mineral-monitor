@@ -83,6 +83,30 @@ export interface ProducerCountry {
   minerals: ProducerMineralItem[]
 }
 
+export interface PriceAlertOut {
+  id: number
+  mineral_id: number
+  mineral_name: string
+  mineral_name_zh: string | null
+  direction: 'above' | 'below'
+  threshold: number
+  note: string | null
+  active: boolean
+  created_at: string
+  last_triggered_at: string | null
+  trigger_count: number
+}
+
+export interface AlertTriggerOut {
+  id: number
+  alert_id: number
+  mineral_name: string
+  direction: 'above' | 'below'
+  threshold: number
+  price_at_trigger: number
+  triggered_at: string
+}
+
 export type MineralCategory = 'rare_earth' | 'battery' | 'strategic' | 'pgm' | 'industrial'
 export type NewsCategory = 'policy' | 'industry' | 'price' | 'corporate' | 'exploration'
 export type NewsLevel = 'government' | 'industry_assoc' | 'corporate'

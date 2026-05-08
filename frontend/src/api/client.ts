@@ -1,4 +1,4 @@
-import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry } from '../types'
+import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry, PriceAlertOut, AlertTriggerOut } from '../types'
 
 const BASE = (import.meta.env.VITE_API_BASE ?? '') + '/api/v1'
 
@@ -16,8 +16,12 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   return res.json()
 }
 
-async function post(path: string): Promise<unknown> {
-  const res = await fetch(`${BASE}${path}`, { method: 'POST' })
+async function post(path: string, body?: unknown): Promise<unknown> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }
@@ -49,6 +53,12 @@ export const api = {
   triggerCrawlNews: () => post('/crawl/news'),
 
   getProducerMap: () => get<ProducerCountry[]>('/map'),
+
+  getAlerts: () => get<PriceAlertOut[]>('/alerts'),
+  createAlert: (body: { mineral_id: number; direction: string; threshold: number; note?: string }) =>
+    post('/alerts', body) as Promise<PriceAlertOut>,
+  deleteAlert: (id: number) => fetch(`${BASE}/alerts/${id}`, { method: 'DELETE' }),
+  getAlertTriggers: () => get<AlertTriggerOut[]>('/alerts/triggers'),
 
   exportMinerals: () => `${BASE}/export/minerals`,
   exportPrices: (days = 30, mineralId?: number) => {

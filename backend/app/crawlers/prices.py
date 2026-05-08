@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import AsyncSessionLocal
 from ..models.mineral import Mineral, MineralPrice
+from ..models.alert import PriceAlert, AlertTrigger
 from .base import BaseCrawler
 
 logger = logging.getLogger(__name__)
@@ -68,8 +69,40 @@ class PriceCrawler(BaseCrawler):
                     logger.warning(f"Failed to fetch {ticker_symbol}: {e}")
 
             await db.commit()
+            await self._check_alerts(db)
 
         return {"success": True, "updated": updated}
+
+    async def _check_alerts(self, db):
+        from sqlalchemy import select, desc
+        alerts_q = await db.execute(
+            select(PriceAlert).where(PriceAlert.active == True)  # noqa: E712
+        )
+        alerts = alerts_q.scalars().all()
+        for alert in alerts:
+            price_q = await db.execute(
+                select(MineralPrice)
+                .where(MineralPrice.mineral_id == alert.mineral_id)
+                .order_by(desc(MineralPrice.timestamp))
+                .limit(1)
+            )
+            latest = price_q.scalar_one_or_none()
+            if not latest:
+                continue
+            triggered = (
+                (alert.direction == "above" and latest.price > alert.threshold) or
+                (alert.direction == "below" and latest.price < alert.threshold)
+            )
+            if triggered:
+                db.add(AlertTrigger(
+                    alert_id=alert.id,
+                    price_at_trigger=latest.price,
+                ))
+                logger.info(
+                    f"Alert {alert.id} triggered: {alert.direction} {alert.threshold}, "
+                    f"current={latest.price}"
+                )
+        await db.commit()
 
     async def _get_yahoo_price(self, symbol: str):
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
