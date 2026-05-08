@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -29,12 +29,10 @@ class CompanySnapshot(Base):
     __tablename__ = "company_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    company_id = Column(Integer, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
     stock_price = Column(Float)
     price_change_pct = Column(Float)
-    market_cap_usd_bn = Column(Float)     # billion USD
+    market_cap_usd_bn = Column(Float)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
 
-    company = relationship("Company", back_populates="snapshots",
-                           primaryjoin="CompanySnapshot.company_id == Company.id",
-                           foreign_keys=[company_id])
+    company = relationship("Company", back_populates="snapshots")
