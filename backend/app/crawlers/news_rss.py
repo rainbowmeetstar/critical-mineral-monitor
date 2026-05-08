@@ -19,7 +19,11 @@ from .base import BaseCrawler
 
 logger = logging.getLogger(__name__)
 
+_GN = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q="
+_GN_ZH = "https://news.google.com/rss/search?hl=zh-CN&gl=CN&ceid=CN:zh-Hans&q="
+
 RSS_SOURCES = [
+    # ── Established industry feeds ──
     {
         "url": "https://mining.com/feed/",
         "source": "Mining.com",
@@ -55,16 +59,56 @@ RSS_SOURCES = [
         "level": "industry_assoc",
         "country": "Global",
     },
+    # ── Google News: policy & regulation ──
     {
-        "url": "https://cleantechnica.com/feed/",
-        "source": "CleanTechnica",
-        "category": "industry",
+        "url": _GN + "critical+minerals+policy+government+regulation",
+        "source": "Google News",
+        "category": "policy",
+        "level": "government",
+        "country": "Global",
+    },
+    {
+        "url": _GN + "critical+minerals+export+controls+sanctions+legislation",
+        "source": "Google News",
+        "category": "policy",
+        "level": "government",
+        "country": "Global",
+    },
+    # ── Google News: Chinese policy (key signal source) ──
+    {
+        "url": _GN_ZH + "稀土+出口管制+关键矿产+政策",
+        "source": "Google News 中文",
+        "category": "policy",
+        "level": "government",
+        "country": "China",
+    },
+    # ── Google News: exploration & development ──
+    {
+        "url": _GN + "lithium+cobalt+%22rare+earth%22+exploration+drilling+discovery",
+        "source": "Google News",
+        "category": "exploration",
         "level": "industry_assoc",
         "country": "Global",
     },
     {
-        "url": "https://www.spglobal.com/commodityinsights/en/rss-feed/metals",
-        "source": "S&P Global Metals",
+        "url": _GN + "critical+minerals+mine+feasibility+resource+estimate",
+        "source": "Google News",
+        "category": "exploration",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    # ── Google News: corporate ──
+    {
+        "url": _GN + "critical+minerals+mining+acquisition+merger+investment+%22joint+venture%22",
+        "source": "Google News",
+        "category": "corporate",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    # ── Google News: price & market ──
+    {
+        "url": _GN + "copper+lithium+cobalt+nickel+%22rare+earth%22+price+market+LME",
+        "source": "Google News",
         "category": "price",
         "level": "industry_assoc",
         "country": "Global",
@@ -151,6 +195,8 @@ class NewsCrawler(BaseCrawler):
         feed = feedparser.parse(content)
         articles = []
 
+        is_google_news = "news.google.com" in cfg["url"]
+
         for entry in feed.entries[:20]:
             title = entry.get("title", "").strip()
             url = entry.get("link", "").strip()
@@ -159,12 +205,25 @@ class NewsCrawler(BaseCrawler):
             if not title or not url:
                 continue
 
+            # Google News embeds the publisher as " - Publisher" at the end of the title
+            # and also in entry.source.title
+            if is_google_news:
+                source_tag = entry.get("source", {})
+                real_source = (
+                    source_tag.get("title")
+                    or (title.rsplit(" - ", 1)[-1] if " - " in title else None)
+                    or cfg["source"]
+                )
+                title = title.rsplit(" - ", 1)[0].strip() if " - " in title else title
+            else:
+                real_source = cfg["source"]
+
             minerals = detect_minerals(title + " " + summary)
 
             articles.append({
                 "title": title[:500],
                 "url": url[:1000],
-                "source": cfg["source"],
+                "source": real_source[:200],
                 "category": cfg["category"],
                 "level": cfg["level"],
                 "country": cfg["country"],
