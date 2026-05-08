@@ -214,55 +214,67 @@ export default function Prices() {
               )}
 
               {/* Forecast Card */}
-              {forecast && forecast.signal !== '数据不足' && (
+              {forecast && (
                 <div className="mt-5 border-t border-slate-800 pt-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Activity className="w-4 h-4 text-slate-400" />
                     <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">价格预测</span>
-                    <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      forecast.signal === '上行' ? 'bg-emerald-500/20 text-emerald-400' :
-                      forecast.signal === '下行' ? 'bg-red-500/20 text-red-400' :
-                      'bg-slate-600/40 text-slate-400'
-                    }`}>
-                      {forecast.signal === '上行' ? '▲ 上行' : forecast.signal === '下行' ? '▼ 下行' : '— 震荡'}
+                    {forecast.signal !== '数据不足' && (
+                      <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        forecast.signal === '上行' ? 'bg-emerald-500/20 text-emerald-400' :
+                        forecast.signal === '下行' ? 'bg-red-500/20 text-red-400' :
+                        'bg-slate-600/40 text-slate-400'
+                      }`}>
+                        {forecast.signal === '上行' ? '▲ 上行' : forecast.signal === '下行' ? '▼ 下行' : '— 震荡'}
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-600 ml-auto">
+                      {forecast.signal === '数据不足'
+                        ? `当前仅${forecast.data_points}条记录，历史数据补充中...`
+                        : `基于近${forecast.data_points}天数据 · 统计模型`}
                     </span>
-                    <span className="text-xs text-slate-600 ml-auto">基于近{forecast.data_points}天数据 · 统计模型</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                      <div className="text-xs text-slate-500 mb-1">7日均线</div>
-                      <div className="text-sm font-medium text-white">
-                        {forecast.ma7?.toFixed(3) ?? '—'}
-                      </div>
+                  {forecast.signal === '数据不足' ? (
+                    <div className="text-xs text-slate-600 py-3 text-center">
+                      历史价格数据不足（需至少5天），系统正在后台补充数据，稍后刷新即可查看预测。
                     </div>
-                    <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                      <div className="text-xs text-slate-500 mb-1">30日均线</div>
-                      <div className="text-sm font-medium text-white">
-                        {forecast.ma30?.toFixed(3) ?? '—'}
-                      </div>
-                    </div>
-                    <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                      <div className="text-xs text-slate-500 mb-1">日均趋势</div>
-                      <div className={`text-sm font-medium ${
-                        (forecast.slope_pct_per_day ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                      }`}>
-                        {forecast.slope_pct_per_day != null
-                          ? `${forecast.slope_pct_per_day >= 0 ? '+' : ''}${forecast.slope_pct_per_day.toFixed(3)}%/天`
-                          : '—'}
-                      </div>
-                    </div>
-                    <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                      <div className="text-xs text-slate-500 mb-1">7天预测区间</div>
-                      {forecast.forecast_7d_low != null && forecast.forecast_7d_high != null ? (
-                        <div className="text-sm font-medium text-sky-300">
-                          {forecast.forecast_7d_low.toFixed(2)} ~ {forecast.forecast_7d_high.toFixed(2)}
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
+                        <div className="text-xs text-slate-500 mb-1">7日均线</div>
+                        <div className="text-sm font-medium text-white">
+                          {forecast.ma7?.toFixed(3) ?? '—'}
                         </div>
-                      ) : (
-                        <div className="text-sm text-slate-600">—</div>
-                      )}
+                      </div>
+                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
+                        <div className="text-xs text-slate-500 mb-1">30日均线</div>
+                        <div className="text-sm font-medium text-white">
+                          {forecast.ma30?.toFixed(3) ?? '—'}
+                        </div>
+                      </div>
+                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
+                        <div className="text-xs text-slate-500 mb-1">日均趋势</div>
+                        <div className={`text-sm font-medium ${
+                          (forecast.slope_pct_per_day ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                        }`}>
+                          {forecast.slope_pct_per_day != null
+                            ? `${forecast.slope_pct_per_day >= 0 ? '+' : ''}${forecast.slope_pct_per_day.toFixed(3)}%/天`
+                            : '—'}
+                        </div>
+                      </div>
+                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
+                        <div className="text-xs text-slate-500 mb-1">7天预测区间</div>
+                        {forecast.forecast_7d_low != null && forecast.forecast_7d_high != null ? (
+                          <div className="text-sm font-medium text-sky-300">
+                            {forecast.forecast_7d_low.toFixed(2)} ~ {forecast.forecast_7d_high.toFixed(2)}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-600">—</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <p className="text-xs text-slate-700 mt-2">
                     预测仅供参考，基于历史统计规律，不构成投资建议。
                   </p>

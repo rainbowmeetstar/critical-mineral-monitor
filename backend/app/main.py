@@ -27,7 +27,8 @@ async def lifespan(app: FastAPI):
         await db.commit()
     start_scheduler()
 
-    from .crawlers import NewsCrawler, PriceCrawler, ReeSpotPriceCrawler, CompanyCrawler
+    from .crawlers import NewsCrawler, PriceCrawler, ReeSpotPriceCrawler, CompanyCrawler, backfill_price_history
+    asyncio.create_task(backfill_price_history())
     asyncio.create_task(PriceCrawler().run())
     asyncio.create_task(ReeSpotPriceCrawler().run())
     asyncio.create_task(NewsCrawler().run())
