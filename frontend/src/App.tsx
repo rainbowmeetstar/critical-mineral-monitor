@@ -1,0 +1,21 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import Layout from './components/Layout/Layout'
+import Home from './pages/Home'
+import Prices from './pages/Prices'
+import News from './pages/News'
+import Minerals from './pages/Minerals'
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="prices" element={<Prices />} />
+          <Route path="news" element={<News />} />
+          <Route path="minerals" element={<Minerals />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
+}
