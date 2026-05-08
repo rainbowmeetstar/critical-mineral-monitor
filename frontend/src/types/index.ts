@@ -66,6 +66,23 @@ export interface DashboardStats {
   }>
 }
 
+export interface ProducerMineralItem {
+  id: number
+  name: string
+  name_zh: string | null
+  symbol: string | null
+  category: string
+  criticality_score: number | null
+}
+
+export interface ProducerCountry {
+  country: string
+  lat: number
+  lng: number
+  mineral_count: number
+  minerals: ProducerMineralItem[]
+}
+
 export type MineralCategory = 'rare_earth' | 'battery' | 'strategic' | 'pgm' | 'industrial'
 export type NewsCategory = 'policy' | 'industry' | 'price' | 'corporate' | 'exploration'
 export type NewsLevel = 'government' | 'industry_assoc' | 'corporate'
