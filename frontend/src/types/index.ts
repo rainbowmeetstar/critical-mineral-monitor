@@ -66,6 +66,27 @@ export interface DashboardStats {
   }>
 }
 
+export interface CompanySnapshot {
+  stock_price: number | null
+  price_change_pct: number | null
+  market_cap_usd_bn: number | null
+  timestamp: string
+}
+
+export interface CompanyOut {
+  id: number
+  name: string
+  name_zh: string | null
+  ticker: string | null
+  exchange: string | null
+  country: string | null
+  minerals_focus: string[]
+  description: string | null
+  description_zh: string | null
+  website: string | null
+  latest_snapshot: CompanySnapshot | null
+}
+
 export interface ProducerMineralItem {
   id: number
   name: string

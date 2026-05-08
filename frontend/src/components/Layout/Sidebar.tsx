@@ -1,13 +1,14 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, Newspaper, Database, Map, Bell } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Newspaper, Database, Map, Bell, Building2 } from 'lucide-react'
 
 const NAV = [
-  { to: '/',        label: '总览',     icon: LayoutDashboard },
-  { to: '/prices',  label: '价格行情', icon: TrendingUp },
-  { to: '/news',    label: '资讯动态', icon: Newspaper },
-  { to: '/minerals',label: '矿产数据库',icon: Database },
-  { to: '/map',     label: '分布地图', icon: Map },
-  { to: '/alerts',  label: '价格预警', icon: Bell },
+  { to: '/',          label: '总览',     icon: LayoutDashboard },
+  { to: '/prices',    label: '价格行情', icon: TrendingUp },
+  { to: '/news',      label: '资讯动态', icon: Newspaper },
+  { to: '/minerals',  label: '矿产数据库',icon: Database },
+  { to: '/companies', label: '矿企动态', icon: Building2 },
+  { to: '/map',       label: '分布地图', icon: Map },
+  { to: '/alerts',    label: '价格预警', icon: Bell },
 ]
 
 export default function Sidebar() {

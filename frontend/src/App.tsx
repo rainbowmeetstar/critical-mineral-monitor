@@ -6,6 +6,7 @@ import News from './pages/News'
 import Minerals from './pages/Minerals'
 import ProducerMap from './pages/ProducerMap'
 import Alerts from './pages/Alerts'
+import Companies from './pages/Companies'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="minerals" element={<Minerals />} />
           <Route path="map" element={<ProducerMap />} />
           <Route path="alerts" element={<Alerts />} />
+          <Route path="companies" element={<Companies />} />
         </Route>
       </Routes>
     </BrowserRouter>
