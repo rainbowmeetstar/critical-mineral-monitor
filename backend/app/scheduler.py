@@ -4,7 +4,7 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from .config import settings
-from .crawlers import PriceCrawler, NewsCrawler, USGSCrawler
+from .crawlers import PriceCrawler, NewsCrawler, USGSCrawler, ChinaPolicyCrawler
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
@@ -17,6 +17,7 @@ async def run_price_crawl():
 async def run_news_crawl():
     await NewsCrawler().run()
     await USGSCrawler().run()
+    await ChinaPolicyCrawler().run()
 
 
 def start_scheduler():
