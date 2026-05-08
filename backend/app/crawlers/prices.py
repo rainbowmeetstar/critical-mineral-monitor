@@ -1,11 +1,11 @@
 """
-Price crawler using Yahoo Finance (yfinance) for traded metals and ETF proxies.
-Rare earth prices sourced from USGS annual data (updated manually / yearly refresh).
+Price crawler using Yahoo Finance chart API for traded metals and ETF proxies.
+Uses direct httpx calls instead of the yfinance library for cloud reliability.
 """
 import logging
 from datetime import datetime, timezone
 
-import yfinance as yf
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,6 @@ from .base import BaseCrawler
 
 logger = logging.getLogger(__name__)
 
-# Yahoo Finance symbols mapped to mineral names
 YAHOO_PRICE_MAP = {
     "HG=F":  {"name": "Copper",    "unit": "USD/lb",      "source": "COMEX"},
     "GC=F":  {"name": "Gold",      "unit": "USD/troy oz", "source": "COMEX"},
@@ -24,8 +23,17 @@ YAHOO_PRICE_MAP = {
     "PA=F":  {"name": "Palladium", "unit": "USD/troy oz", "source": "NYMEX"},
     "ALI=F": {"name": "Aluminum",  "unit": "USD/t",       "source": "COMEX"},
     "LIT":   {"name": "Lithium",   "unit": "USD (ETF)",   "source": "NYSE (ETF proxy: LIT)"},
-    "REMX":  {"name": "Rare Earth","unit": "USD (ETF)",   "source": "NYSE (ETF proxy: REMX)"},
     "MP":    {"name": "Neodymium", "unit": "USD (equity)","source": "NYSE (MP Materials proxy)"},
+}
+
+_YF_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
 
@@ -43,6 +51,7 @@ class PriceCrawler(BaseCrawler):
 
                     mineral = await self._get_or_skip_mineral(db, meta["name"])
                     if not mineral:
+                        logger.warning(f"No mineral found for name='{meta['name']}'")
                         continue
 
                     entry = MineralPrice(
@@ -63,20 +72,33 @@ class PriceCrawler(BaseCrawler):
         return {"success": True, "updated": updated}
 
     async def _get_yahoo_price(self, symbol: str):
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        params = {"interval": "1d", "range": "5d"}
         try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="2d")
-            if hist.empty:
+            async with httpx.AsyncClient(
+                timeout=15.0, headers=_YF_HEADERS, follow_redirects=True
+            ) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+
+            result = data["chart"]["result"][0]
+            closes = result["indicators"]["quote"][0].get("close", [])
+            closes = [c for c in closes if c is not None]
+
+            if not closes:
                 return None, None
-            latest = hist["Close"].iloc[-1]
-            if len(hist) >= 2:
-                prev = hist["Close"].iloc[-2]
-                change_pct = ((latest - prev) / prev) * 100 if prev else None
-            else:
-                change_pct = None
-            return float(latest), change_pct
+
+            latest = float(closes[-1])
+            change_pct = None
+            if len(closes) >= 2:
+                prev = closes[-2]
+                if prev:
+                    change_pct = ((latest - prev) / prev) * 100
+
+            return latest, change_pct
         except Exception as e:
-            logger.warning(f"yfinance error for {symbol}: {e}")
+            logger.warning(f"Yahoo Finance API error for {symbol}: {e}")
             return None, None
 
     async def _get_or_skip_mineral(self, db: AsyncSession, name: str):
