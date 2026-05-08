@@ -1,6 +1,6 @@
 import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats } from '../types'
 
-const BASE = '/api/v1'
+const BASE = (import.meta.env.VITE_API_BASE ?? '') + '/api/v1'
 
 async function get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
   const url = new URL(`${BASE}${path}`, window.location.origin)
