@@ -1,4 +1,4 @@
-import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry, PriceAlertOut, AlertTriggerOut, CompanyOut } from '../types'
+import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry, PriceAlertOut, AlertTriggerOut, CompanyOut, ForecastOut } from '../types'
 
 const BASE = (import.meta.env.VITE_API_BASE ?? '') + '/api/v1'
 
@@ -35,6 +35,9 @@ export const api = {
 
   getPriceHistory: (id: number, days = 30) =>
     get<PriceHistory>(`/minerals/${id}/prices`, { days }),
+
+  getForecast: (id: number) =>
+    get<ForecastOut>(`/minerals/${id}/forecast`),
 
   getNews: (params?: {
     category?: string

@@ -7,9 +7,11 @@ from .map import router as map_router
 from .export import router as export_router
 from .alerts import router as alerts_router
 from .companies import router as companies_router
+from .forecast import router as forecast_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(minerals_router)
+api_router.include_router(forecast_router)
 api_router.include_router(news_router)
 api_router.include_router(stats_router)
 api_router.include_router(crawl_router)

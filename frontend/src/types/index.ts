@@ -128,6 +128,20 @@ export interface AlertTriggerOut {
   triggered_at: string
 }
 
+export interface ForecastOut {
+  mineral_id: number
+  mineral_name: string
+  signal: '上行' | '下行' | '震荡' | '数据不足'
+  ma7: number | null
+  ma30: number | null
+  slope_pct_per_day: number | null
+  latest_price: number | null
+  forecast_7d_low: number | null
+  forecast_7d_mid: number | null
+  forecast_7d_high: number | null
+  data_points: number
+}
+
 export type MineralCategory = 'rare_earth' | 'battery' | 'strategic' | 'pgm' | 'industrial'
 export type NewsCategory = 'policy' | 'industry' | 'price' | 'corporate' | 'exploration'
 export type NewsLevel = 'government' | 'industry_assoc' | 'corporate'
