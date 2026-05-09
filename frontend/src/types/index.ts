@@ -128,18 +128,37 @@ export interface AlertTriggerOut {
   triggered_at: string
 }
 
+export interface SignalItem {
+  label: string
+  value: string
+  score: number
+  direction: 'bull' | 'bear' | 'neutral'
+}
+
 export interface ForecastOut {
   mineral_id: number
   mineral_name: string
-  signal: '上行' | '下行' | '震荡' | '数据不足'
+  data_points: number
+  latest_price: number | null
   ma7: number | null
   ma30: number | null
+  ma90: number | null
+  rsi14: number | null
+  momentum_7d_pct: number | null
+  momentum_30d_pct: number | null
+  volatility_30d_pct: number | null
   slope_pct_per_day: number | null
-  latest_price: number | null
   forecast_7d_low: number | null
   forecast_7d_mid: number | null
   forecast_7d_high: number | null
-  data_points: number
+  news_7d_total: number
+  news_30d_policy: number
+  news_30d_price: number
+  news_30d_exploration: number
+  composite_score: number
+  outlook: '看涨' | '温和看涨' | '中性' | '温和看跌' | '看跌' | '数据不足'
+  signal_breakdown: SignalItem[]
+  outlook_text: string
 }
 
 export type MineralCategory = 'rare_earth' | 'battery' | 'strategic' | 'pgm' | 'industrial'

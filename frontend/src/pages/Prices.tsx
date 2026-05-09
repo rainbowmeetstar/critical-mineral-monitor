@@ -5,7 +5,131 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import { format } from 'date-fns'
-import { TrendingUp, TrendingDown, Download, Activity } from 'lucide-react'
+import { TrendingUp, TrendingDown, Download, Activity, Newspaper, BarChart2 } from 'lucide-react'
+import type { ForecastOut } from '../types'
+
+// ── Outlook badge ──────────────────────────────────────────────────────────────
+const OUTLOOK_STYLE: Record<string, string> = {
+  '看涨':   'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  '温和看涨':'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  '中性':   'bg-slate-600/30 text-slate-400 border-slate-600/40',
+  '温和看跌':'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  '看跌':   'bg-red-500/20 text-red-400 border-red-500/30',
+  '数据不足':'bg-slate-700/30 text-slate-500 border-slate-700/40',
+}
+const OUTLOOK_ICON: Record<string, string> = {
+  '看涨': '▲', '温和看涨': '↗', '中性': '—', '温和看跌': '↘', '看跌': '▼', '数据不足': '?',
+}
+
+function ForecastCard({ forecast }: { forecast: ForecastOut }) {
+  const badgeStyle = OUTLOOK_STYLE[forecast.outlook] ?? OUTLOOK_STYLE['中性']
+  const isInsufficient = forecast.outlook === '数据不足'
+
+  return (
+    <div className="mt-5 border-t border-slate-800 pt-5 space-y-4">
+      {/* Header row */}
+      <div className="flex items-center gap-3">
+        <Activity className="w-4 h-4 text-slate-400 shrink-0" />
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">智能价格展望</span>
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${badgeStyle}`}>
+          {OUTLOOK_ICON[forecast.outlook]} {forecast.outlook}
+        </span>
+        <span className="text-xs text-slate-600 ml-auto">
+          基于{forecast.data_points}个交易日 · 技术+资讯融合分析
+        </span>
+      </div>
+
+      {isInsufficient ? (
+        <p className="text-xs text-slate-600 text-center py-3">
+          历史数据补充中（当前{forecast.data_points}条），稍后刷新即可查看完整分析。
+        </p>
+      ) : (
+        <>
+          {/* Natural language outlook */}
+          <div className="bg-slate-800/40 rounded-xl px-4 py-3 text-sm text-slate-300 leading-relaxed border border-slate-700/40">
+            {forecast.outlook_text}
+          </div>
+
+          {/* Technical indicators row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+            {[
+              { label: 'MA7',   v: forecast.ma7?.toFixed(2)   ?? '—', color: '' },
+              { label: 'MA30',  v: forecast.ma30?.toFixed(2)  ?? '—', color: '' },
+              { label: 'MA90',  v: forecast.ma90?.toFixed(2)  ?? '—', color: '' },
+              { label: 'RSI(14)', v: forecast.rsi14 != null ? forecast.rsi14.toFixed(0) : '—',
+                color: (forecast.rsi14 ?? 50) > 70 ? 'text-red-400' : (forecast.rsi14 ?? 50) < 30 ? 'text-emerald-400' : '' },
+              { label: '7日涨跌', v: forecast.momentum_7d_pct != null ? `${forecast.momentum_7d_pct >= 0 ? '+' : ''}${forecast.momentum_7d_pct.toFixed(1)}%` : '—',
+                color: (forecast.momentum_7d_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+              { label: '30日涨跌', v: forecast.momentum_30d_pct != null ? `${forecast.momentum_30d_pct >= 0 ? '+' : ''}${forecast.momentum_30d_pct.toFixed(1)}%` : '—',
+                color: (forecast.momentum_30d_pct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400' },
+              { label: '年化波动', v: forecast.volatility_30d_pct != null ? `${forecast.volatility_30d_pct.toFixed(0)}%` : '—', color: 'text-amber-400' },
+              { label: '7日预测区间', v: forecast.forecast_7d_low != null ? `${forecast.forecast_7d_low.toFixed(1)}–${forecast.forecast_7d_high?.toFixed(1)}` : '—', color: 'text-sky-300' },
+            ].map(({ label, v, color }) => (
+              <div key={label} className="bg-slate-800/60 rounded-lg px-2.5 py-2 text-center">
+                <div className="text-xs text-slate-500 mb-0.5">{label}</div>
+                <div className={`text-sm font-medium ${color || 'text-white'}`}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Signal breakdown + news */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Signal breakdown */}
+            <div className="bg-slate-800/30 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <BarChart2 className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-xs text-slate-500 font-medium">信号分解</span>
+                <span className="ml-auto text-xs text-slate-600">综合评分 {forecast.composite_score > 0 ? '+' : ''}{forecast.composite_score.toFixed(2)}</span>
+              </div>
+              <div className="space-y-1.5">
+                {forecast.signal_breakdown.map(sig => (
+                  <div key={sig.label} className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 w-20 shrink-0">{sig.label}</span>
+                    <span className={`text-xs flex-1 ${sig.direction === 'bull' ? 'text-emerald-400' : sig.direction === 'bear' ? 'text-red-400' : 'text-slate-400'}`}>
+                      {sig.value}
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${sig.direction === 'bull' ? 'bg-emerald-500' : sig.direction === 'bear' ? 'bg-red-500' : 'bg-slate-500'}`}
+                          style={{ width: `${Math.min(Math.abs(sig.score) / 1.5 * 100, 100)}%`, marginLeft: sig.score < 0 ? 'auto' : undefined }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* News sentiment */}
+            <div className="bg-slate-800/30 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Newspaper className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-xs text-slate-500 font-medium">资讯情感面（近30日）</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: '近7日热度', v: forecast.news_7d_total, color: forecast.news_7d_total > 3 ? 'text-sky-400' : 'text-slate-400' },
+                  { label: '政策资讯', v: forecast.news_30d_policy, color: forecast.news_30d_policy > 0 ? 'text-amber-400' : 'text-slate-400' },
+                  { label: '价格资讯', v: forecast.news_30d_price, color: forecast.news_30d_price > 0 ? 'text-emerald-400' : 'text-slate-400' },
+                  { label: '勘探资讯', v: forecast.news_30d_exploration, color: forecast.news_30d_exploration > 0 ? 'text-purple-400' : 'text-slate-400' },
+                ].map(({ label, v, color }) => (
+                  <div key={label} className="flex items-center justify-between bg-slate-800/60 rounded-lg px-2.5 py-1.5">
+                    <span className="text-xs text-slate-500">{label}</span>
+                    <span className={`text-sm font-medium ${color}`}>{v} 篇</span>
+                  </div>
+                ))}
+              </div>
+              {forecast.news_7d_total === 0 && forecast.news_30d_policy === 0 && (
+                <p className="text-xs text-slate-600 mt-2 text-center">暂无相关资讯，已基于技术面分析</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 const DAYS_OPTIONS = [7, 30, 90, 365]
 const CATEGORY_FILTER = [
@@ -213,73 +337,8 @@ export default function Prices() {
                 </div>
               )}
 
-              {/* Forecast Card */}
-              {forecast && (
-                <div className="mt-5 border-t border-slate-800 pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Activity className="w-4 h-4 text-slate-400" />
-                    <span className="text-xs font-medium text-slate-400 uppercase tracking-widest">价格预测</span>
-                    {forecast.signal !== '数据不足' && (
-                      <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        forecast.signal === '上行' ? 'bg-emerald-500/20 text-emerald-400' :
-                        forecast.signal === '下行' ? 'bg-red-500/20 text-red-400' :
-                        'bg-slate-600/40 text-slate-400'
-                      }`}>
-                        {forecast.signal === '上行' ? '▲ 上行' : forecast.signal === '下行' ? '▼ 下行' : '— 震荡'}
-                      </span>
-                    )}
-                    <span className="text-xs text-slate-600 ml-auto">
-                      {forecast.signal === '数据不足'
-                        ? `当前仅${forecast.data_points}条记录，历史数据补充中...`
-                        : `基于近${forecast.data_points}天数据 · 统计模型`}
-                    </span>
-                  </div>
-
-                  {forecast.signal === '数据不足' ? (
-                    <div className="text-xs text-slate-600 py-3 text-center">
-                      历史价格数据不足（需至少5天），系统正在后台补充数据，稍后刷新即可查看预测。
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                        <div className="text-xs text-slate-500 mb-1">7日均线</div>
-                        <div className="text-sm font-medium text-white">
-                          {forecast.ma7?.toFixed(3) ?? '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                        <div className="text-xs text-slate-500 mb-1">30日均线</div>
-                        <div className="text-sm font-medium text-white">
-                          {forecast.ma30?.toFixed(3) ?? '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                        <div className="text-xs text-slate-500 mb-1">日均趋势</div>
-                        <div className={`text-sm font-medium ${
-                          (forecast.slope_pct_per_day ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                        }`}>
-                          {forecast.slope_pct_per_day != null
-                            ? `${forecast.slope_pct_per_day >= 0 ? '+' : ''}${forecast.slope_pct_per_day.toFixed(3)}%/天`
-                            : '—'}
-                        </div>
-                      </div>
-                      <div className="bg-slate-800/60 rounded-lg px-3 py-2.5">
-                        <div className="text-xs text-slate-500 mb-1">7天预测区间</div>
-                        {forecast.forecast_7d_low != null && forecast.forecast_7d_high != null ? (
-                          <div className="text-sm font-medium text-sky-300">
-                            {forecast.forecast_7d_low.toFixed(2)} ~ {forecast.forecast_7d_high.toFixed(2)}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-slate-600">—</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-xs text-slate-700 mt-2">
-                    预测仅供参考，基于历史统计规律，不构成投资建议。
-                  </p>
-                </div>
-              )}
+              {/* AI Forecast Card */}
+              {forecast && <ForecastCard forecast={forecast} />}
             </>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 py-20">
