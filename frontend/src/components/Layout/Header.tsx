@@ -19,10 +19,10 @@ export default function Header() {
   })
 
   return (
-    <header className="h-14 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0">
+    <header className="h-14 border-b border-stone-800 bg-stone-900/50 flex items-center justify-between px-6 shrink-0">
       <h1 className="font-semibold text-white">{title}</h1>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-stone-500">
           {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
         </span>
         <button

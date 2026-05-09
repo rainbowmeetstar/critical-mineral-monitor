@@ -14,9 +14,9 @@ const NAV = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-      <div className="px-5 py-6 border-b border-slate-800">
-        <div className="text-xs text-sky-400 font-semibold tracking-widest uppercase mb-1">
+    <aside className="w-56 bg-stone-900 border-r border-stone-800 flex flex-col shrink-0">
+      <div className="px-5 py-6 border-b border-stone-800">
+        <div className="text-xs text-orange-400 font-semibold tracking-widest uppercase mb-1">
           Critical Mineral
         </div>
         <div className="text-lg font-bold text-white">监测平台</div>
@@ -31,8 +31,8 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 isActive
-                  ? 'bg-sky-600/20 text-sky-400 font-medium'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  ? 'bg-orange-600/20 text-orange-400 font-medium'
+                  : 'text-stone-400 hover:text-white hover:bg-stone-800'
               }`
             }
           >
@@ -42,7 +42,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-5 py-4 border-t border-slate-800 text-xs text-slate-600">
+      <div className="px-5 py-4 border-t border-stone-800 text-xs text-stone-600">
         数据来源: USGS · LME · Mining.com
       </div>
     </aside>

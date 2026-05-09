@@ -65,11 +65,11 @@ export default function Alerts() {
         </h2>
         <div className="flex flex-wrap gap-3 items-end">
           <div>
-            <label className="block text-xs text-slate-500 mb-1.5">矿产</label>
+            <label className="block text-xs text-stone-500 mb-1.5">矿产</label>
             <select
               value={mineralId}
               onChange={e => setMineralId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-sky-500 min-w-[160px]"
+              className="bg-stone-800 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-orange-500 min-w-[160px]"
             >
               <option value="">选择矿产...</option>
               {minerals.map(m => (
@@ -80,14 +80,14 @@ export default function Alerts() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1.5">触发条件</label>
+            <label className="block text-xs text-stone-500 mb-1.5">触发条件</label>
             <div className="flex gap-1">
               {(['above', 'below'] as const).map(d => (
                 <button
                   key={d}
                   onClick={() => setDirection(d)}
                   className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                    direction === d ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                    direction === d ? 'bg-orange-600 text-white' : 'bg-stone-800 text-stone-400 hover:text-white'
                   }`}
                 >
                   {DIRECTION_LABEL[d]}
@@ -96,28 +96,28 @@ export default function Alerts() {
             </div>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1.5">阈值</label>
+            <label className="block text-xs text-stone-500 mb-1.5">阈值</label>
             <input
               type="number"
               value={threshold}
               onChange={e => setThreshold(e.target.value)}
               placeholder="如: 9000"
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white w-32 outline-none focus:border-sky-500"
+              className="bg-stone-800 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white w-32 outline-none focus:border-orange-500"
             />
           </div>
           <div className="flex-1 min-w-[160px]">
-            <label className="block text-xs text-slate-500 mb-1.5">备注（可选）</label>
+            <label className="block text-xs text-stone-500 mb-1.5">备注（可选）</label>
             <input
               value={note}
               onChange={e => setNote(e.target.value)}
               placeholder="备注说明"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-sky-500"
+              className="w-full bg-stone-800 border border-stone-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-orange-500"
             />
           </div>
           <button
             onClick={handleCreate}
             disabled={createMut.isPending}
-            className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
           >
             {createMut.isPending ? '创建中...' : '创建预警'}
           </button>
@@ -126,12 +126,12 @@ export default function Alerts() {
 
         {/* Reference prices */}
         {mineralsWithPrice.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-800">
-            <p className="text-xs text-slate-500 mb-2">最新参考价格</p>
+          <div className="mt-4 pt-4 border-t border-stone-800">
+            <p className="text-xs text-stone-500 mb-2">最新参考价格</p>
             <div className="flex flex-wrap gap-2">
               {mineralsWithPrice.slice(0, 10).map(m => (
-                <span key={m.id} className="text-xs bg-slate-800 px-2 py-1 rounded text-slate-400">
-                  {m.name_zh ?? m.name}: <span className="text-sky-300">{m.latest_price?.price.toFixed(2)}</span> {m.latest_price?.unit}
+                <span key={m.id} className="text-xs bg-stone-800 px-2 py-1 rounded text-stone-400">
+                  {m.name_zh ?? m.name}: <span className="text-orange-300">{m.latest_price?.price.toFixed(2)}</span> {m.latest_price?.unit}
                 </span>
               ))}
             </div>
@@ -144,10 +144,10 @@ export default function Alerts() {
         <div>
           <h2 className="font-semibold text-white mb-3 flex items-center gap-2">
             <Bell className="w-4 h-4" /> 预警规则
-            <span className="text-xs text-slate-500 font-normal ml-1">({alerts.length})</span>
+            <span className="text-xs text-stone-500 font-normal ml-1">({alerts.length})</span>
           </h2>
           {alerts.length === 0 ? (
-            <div className="card text-center py-10 text-slate-500">
+            <div className="card text-center py-10 text-stone-500">
               <BellOff className="w-8 h-8 mx-auto mb-2 opacity-30" />
               <p className="text-sm">暂无预警规则</p>
             </div>
@@ -164,15 +164,15 @@ export default function Alerts() {
                         {DIRECTION_LABEL[a.direction as keyof typeof DIRECTION_LABEL]} {a.threshold}
                       </span>
                     </div>
-                    {a.note && <p className="text-xs text-slate-500 mt-0.5">{a.note}</p>}
-                    <p className="text-xs text-slate-600 mt-0.5">
+                    {a.note && <p className="text-xs text-stone-500 mt-0.5">{a.note}</p>}
+                    <p className="text-xs text-stone-600 mt-0.5">
                       触发 {a.trigger_count} 次
                       {a.last_triggered_at && ` · 最近 ${formatDistanceToNow(new Date(a.last_triggered_at), { addSuffix: true, locale: zhCN })}`}
                     </p>
                   </div>
                   <button
                     onClick={() => deleteMut.mutate(a.id)}
-                    className="p-1.5 text-slate-600 hover:text-red-400 transition-colors"
+                    className="p-1.5 text-stone-600 hover:text-red-400 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -186,10 +186,10 @@ export default function Alerts() {
         <div>
           <h2 className="font-semibold text-white mb-3 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400" /> 近期触发记录
-            <span className="text-xs text-slate-500 font-normal ml-1">(7天内)</span>
+            <span className="text-xs text-stone-500 font-normal ml-1">(7天内)</span>
           </h2>
           {triggers.length === 0 ? (
-            <div className="card text-center py-10 text-slate-500">
+            <div className="card text-center py-10 text-stone-500">
               <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
               <p className="text-sm">近期无预警触发</p>
             </div>
@@ -209,8 +209,8 @@ export default function Alerts() {
                         {DIRECTION_LABEL[t.direction as keyof typeof DIRECTION_LABEL]} {t.threshold}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      触发价格: <span className="text-sky-300">{t.price_at_trigger.toFixed(2)}</span>
+                    <p className="text-xs text-stone-500">
+                      触发价格: <span className="text-orange-300">{t.price_at_trigger.toFixed(2)}</span>
                       {' · '}
                       {formatDistanceToNow(new Date(t.triggered_at), { addSuffix: true, locale: zhCN })}
                     </p>
