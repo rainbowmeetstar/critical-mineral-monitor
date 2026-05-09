@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, Newspaper, Database, Map, Bell, Building2 } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Newspaper, Database, Map, Bell, Building2, FileText } from 'lucide-react'
 
 const NAV = [
   { to: '/',          label: '总览',     icon: LayoutDashboard },
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/companies', label: '矿企动态', icon: Building2 },
   { to: '/map',       label: '分布地图', icon: Map },
   { to: '/alerts',    label: '价格预警', icon: Bell },
+  { to: '/briefing',  label: '分析简报', icon: FileText },
 ]
 
 export default function Sidebar() {

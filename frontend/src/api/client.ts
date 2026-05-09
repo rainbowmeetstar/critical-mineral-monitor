@@ -75,4 +75,9 @@ export const api = {
     if (category) p.set('category', category)
     return `${BASE}/export/news?${p}`
   },
+
+  briefingGlobal: (audience: 'enterprise' | 'government') =>
+    `${BASE}/briefing/global?audience=${audience}`,
+  briefingMineral: (mineralId: number, audience: 'enterprise' | 'government') =>
+    `${BASE}/briefing/mineral/${mineralId}?audience=${audience}`,
 }
