@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, TrendingUp, Newspaper, Database, Map, Bell, Building2, FileText } from 'lucide-react'
 
 const NAV = [
-  { to: '/',          label: '总览',     icon: LayoutDashboard },
+  { to: '/',          label: '风险态势图', icon: LayoutDashboard },
   { to: '/prices',    label: '价格行情', icon: TrendingUp },
   { to: '/news',      label: '资讯动态', icon: Newspaper },
   { to: '/minerals',  label: '矿产数据库',icon: Database },

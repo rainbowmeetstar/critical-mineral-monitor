@@ -1,4 +1,4 @@
-import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry, PriceAlertOut, AlertTriggerOut, CompanyOut, ForecastOut } from '../types'
+import { Mineral, MineralDetail, PriceHistory, NewsArticle, DashboardStats, ProducerCountry, PriceAlertOut, AlertTriggerOut, CompanyOut, ForecastOut, TickerItem, CountryDetail } from '../types'
 
 const BASE = (import.meta.env.VITE_API_BASE ?? '') + '/api/v1'
 
@@ -56,6 +56,8 @@ export const api = {
   triggerCrawlNews: () => post('/crawl/news'),
 
   getProducerMap: () => get<ProducerCountry[]>('/map'),
+  getMapTicker: () => get<TickerItem[]>('/map/ticker'),
+  getCountryDetail: (country: string) => get<CountryDetail>(`/map/country/${encodeURIComponent(country)}`),
   getCompanies: (mineral?: string) => get<CompanyOut[]>('/companies', { mineral }),
 
   getAlerts: () => get<PriceAlertOut[]>('/alerts'),

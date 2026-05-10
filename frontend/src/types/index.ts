@@ -102,6 +102,53 @@ export interface ProducerCountry {
   lng: number
   mineral_count: number
   minerals: ProducerMineralItem[]
+  influence_score: number
+  alert_level: 'critical' | 'high' | 'medium' | 'none'
+  recent_news_count: number
+}
+
+export interface TickerItem {
+  type: 'news' | 'price' | 'alert'
+  text: string
+  url?: string
+  ts: string
+}
+
+export interface CountryMineralItem extends ProducerMineralItem {
+  latest_price: {
+    price: number
+    price_change_pct: number | null
+    unit: string | null
+    timestamp: string
+  } | null
+}
+
+export interface CountryDetail {
+  country: string
+  minerals: CountryMineralItem[]
+  influence_score: number
+  recent_news: Array<{
+    id: number
+    title: string
+    url: string | null
+    source: string | null
+    category: string | null
+    published_at: string | null
+    summary: string | null
+  }>
+  related_countries: Array<{
+    country: string
+    shared_minerals: string[]
+  }>
+  companies: Array<{
+    id: number
+    name: string
+    name_zh: string | null
+    ticker: string | null
+    exchange: string | null
+    minerals_focus: string[]
+    latest_snapshot: { stock_price: number | null; price_change_pct: number | null } | null
+  }>
 }
 
 export interface PriceAlertOut {

@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '../../api/client'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/': '总览仪表板',
+  '/': '全球关键矿产风险态势',
   '/prices': '矿产价格行情',
   '/news': '全球资讯动态',
   '/minerals': '矿产数据库',
