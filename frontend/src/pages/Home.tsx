@@ -11,7 +11,6 @@ import 'leaflet/dist/leaflet.css'
 import { api } from '../api/client'
 import type { ProducerCountry, TickerItem } from '../types'
 import {
-  Globe, AlertTriangle, TrendingUp, Activity, Layers,
   ChevronRight, X, Building2, Newspaper, MapPin, Zap,
 } from 'lucide-react'
 
@@ -348,7 +347,7 @@ function RelationGraph({ center, related }:{ center:string; related:{country:str
 
 // ── Country detail panel ───────────────────────────────────────────────────────
 
-function CountryPanel({ country, alertLevel, onClose }:{ country:string; alertLevel:string; onClose:()=>void }) {
+function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; onClose:()=>void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['country', country],
     queryFn: () => api.getCountryDetail(country),
