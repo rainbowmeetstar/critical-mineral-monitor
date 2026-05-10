@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap,
 } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { api } from '../api/client'
-import type { ProducerCountry, CountryDetail, TickerItem } from '../types'
+import type { ProducerCountry, TickerItem } from '../types'
 import {
   Globe, AlertTriangle, TrendingUp, Activity, Layers,
-  ChevronRight, X, ExternalLink, Building2, Newspaper,
+  ChevronRight, X, Building2, Newspaper,
 } from 'lucide-react'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
