@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,7 +7,7 @@ from datetime import datetime, timedelta
 from ..database import get_db
 from ..models.mineral import Mineral, MineralPrice
 from ..models.news import NewsArticle
-from ..models.company import Company
+from ..models.company import Company, CompanySnapshot
 from ..models.alert import AlertTrigger, PriceAlert
 
 router = APIRouter(prefix="/map", tags=["map"])
@@ -30,7 +31,7 @@ COUNTRY_COORDS: dict[str, tuple[float, float]] = {
     "Germany": (51.16, 10.45), "UK": (55.37, -3.44),
 }
 
-# Geopolitical risk baseline (0-100)
+# Geopolitical risk baseline 0-100 (independent of live news data)
 GEO_RISK: dict[str, int] = {
     "Ukraine": 92, "DRC": 85, "Myanmar": 82, "Russia": 78,
     "Zimbabwe": 65, "Mozambique": 60, "Kazakhstan": 55, "Bolivia": 52,
@@ -45,9 +46,9 @@ GEO_RISK: dict[str, int] = {
 KNOWN_MINES: dict[str, list] = {
     "Australia": [
         {"name": "Greenbushes 锂矿", "location": "西澳州", "mineral": "锂", "output": "48 万吨/年"},
-        {"name": "Pilbara Minerals 锂矿区", "location": "西澳州", "mineral": "铁·镍", "output": "—"},
         {"name": "Mount Weld 稀土矿", "location": "西澳州", "mineral": "稀土", "output": "2.2 万吨/年"},
-        {"name": "Olympic Dam 铜金矿", "location": "南澳州", "mineral": "铜·金", "output": "23 万吨/年"},
+        {"name": "Olympic Dam", "location": "南澳州", "mineral": "铜·金", "output": "23 万吨/年"},
+        {"name": "Pilbara Minerals", "location": "西澳州", "mineral": "锂", "output": "—"},
     ],
     "China": [
         {"name": "包头稀土矿区", "location": "内蒙古", "mineral": "稀土", "output": "全球第一"},
@@ -57,8 +58,7 @@ KNOWN_MINES: dict[str, list] = {
     ],
     "DRC": [
         {"name": "Tenke Fungurume", "location": "加丹加省", "mineral": "钴·铜", "output": "全球最大钴矿"},
-        {"name": "Kamoa-Kakula 铜矿", "location": "刚果中部", "mineral": "铜", "output": "高品位铜矿"},
-        {"name": "RTR 钴矿区", "location": "加丹加", "mineral": "钴", "output": "—"},
+        {"name": "Kamoa-Kakula", "location": "刚果中部", "mineral": "铜", "output": "高品位铜矿"},
     ],
     "Chile": [
         {"name": "Atacama 盐湖", "location": "阿塔卡马沙漠", "mineral": "锂", "output": "全球最大锂盐湖"},
@@ -80,11 +80,6 @@ KNOWN_MINES: dict[str, list] = {
     "Canada": [
         {"name": "Thompson 镍矿", "location": "马尼托巴", "mineral": "镍", "output": "重要产地"},
         {"name": "Sudbury 矿区", "location": "安大略", "mineral": "镍·铜·铂族", "output": "历史矿区"},
-        {"name": "Ring of Fire 项目", "location": "安大略北部", "mineral": "铬·镍", "output": "开发中"},
-    ],
-    "Kazakhstan": [
-        {"name": "Zhezkazgan 铜矿", "location": "卡拉干达州", "mineral": "铜", "output": "重要产地"},
-        {"name": "Khromtau 铬矿", "location": "阿克托别州", "mineral": "铬", "output": "全球主产区"},
     ],
     "United States": [
         {"name": "Mountain Pass 稀土矿", "location": "加利福尼亚", "mineral": "稀土", "output": "西半球最大"},
@@ -98,6 +93,10 @@ KNOWN_MINES: dict[str, list] = {
         {"name": "克钦邦稀土矿区", "location": "北部克钦邦", "mineral": "重稀土", "output": "全球第二"},
         {"name": "掸邦锡钨矿", "location": "掸邦", "mineral": "锡·钨", "output": "重要产区"},
     ],
+    "Kazakhstan": [
+        {"name": "Zhezkazgan 铜矿", "location": "卡拉干达州", "mineral": "铜", "output": "重要产地"},
+        {"name": "Khromtau 铬矿", "location": "阿克托别州", "mineral": "铬", "output": "全球主产区"},
+    ],
 }
 
 
@@ -105,35 +104,46 @@ def _norm(raw: str) -> str:
     return raw.split("(")[0].strip()
 
 
+def _estimate_global_share(country: str, mineral: Mineral) -> float:
+    """Estimate country's % of global production. Parses explicit % or uses rank-based estimate."""
+    producers = mineral.top_producers or []
+    for i, prod in enumerate(producers):
+        if _norm(prod) != country:
+            continue
+        m = re.search(r'>?\s*~?\s*(\d+(?:\.\d+)?)\s*%', prod)
+        if m:
+            return float(m.group(1))
+        # Rank-based estimates (calibrated to typical concentration)
+        n = len(producers)
+        table = {
+            1: [90],
+            2: [65, 30],
+            3: [55, 27, 14],
+            4: [45, 25, 16, 10],
+            5: [37, 22, 16, 13, 9],
+        }
+        row = table.get(n, [30, 20, 14, 12, 10, 8, 6])
+        return row[i] if i < len(row) else 4
+    return 0.0
+
+
 def _compute_risk(country: str, minerals: list, news: list, triggered_ids: set) -> dict:
     geo = GEO_RISK.get(country, 30)
-
     crit_sum = sum(m.get("criticality_score") or 0 for m in minerals)
     supply = min(100, int(crit_sum * 2.5))
-
-    volatile = sum(1 for m in minerals
-                   if m.get("latest_price") and abs(m["latest_price"].get("price_change_pct") or 0) > 2)
+    volatile = sum(
+        1 for m in minerals
+        if m.get("latest_price") and abs(m["latest_price"].get("price_change_pct") or 0) > 2
+    )
     price = min(100, volatile * 20 + (30 if any(m["id"] in triggered_ids for m in minerals) else 0))
-
     policy_n = sum(1 for n in news if n.get("category") == "policy")
     corp_n   = sum(1 for n in news if n.get("category") == "corporate")
     expl_n   = sum(1 for n in news if n.get("category") == "exploration")
-
-    industry    = min(100, corp_n * 12 + 10)
+    industry      = min(100, corp_n * 12 + 10)
     environmental = min(100, expl_n * 15 + 15)
-
-    geopolitical = min(100, geo + policy_n * 5)
-
-    risk_score = int(supply * 0.30 + price * 0.20 + geopolitical * 0.25 + industry * 0.15 + environmental * 0.10)
-    if risk_score >= 70:
-        level = "critical"
-    elif risk_score >= 50:
-        level = "high"
-    elif risk_score >= 30:
-        level = "medium"
-    else:
-        level = "low"
-
+    geopolitical  = min(100, geo + policy_n * 5)
+    risk_score = int(supply*0.30 + price*0.20 + geopolitical*0.25 + industry*0.15 + environmental*0.10)
+    level = "critical" if risk_score >= 70 else "high" if risk_score >= 50 else "medium" if risk_score >= 30 else "low"
     return {
         "supply": supply, "price": price, "geopolitical": geopolitical,
         "industry": industry, "environmental": environmental,
@@ -202,14 +212,20 @@ async def get_producer_map(db: AsyncSession = Depends(get_db)):
                     alerted.add(c)
 
     for c, data in country_map.items():
-        if c in alerted:
+        geo = GEO_RISK.get(c, 30)
+        is_alerted = c in alerted
+        is_policy  = c in policy_countries
+        is_active  = news_counts.get(c, 0) >= 3
+        # Combine live signals with geopolitical baseline
+        if is_alerted or geo >= 75:
             data["alert_level"] = "critical"
-        elif c in policy_countries:
+        elif is_policy or geo >= 55:
             data["alert_level"] = "high"
-        elif news_counts.get(c, 0) >= 3:
+        elif is_active or geo >= 38:
             data["alert_level"] = "medium"
         else:
             data["alert_level"] = "none"
+        data["geo_risk"] = geo
         data["recent_news_count"] = news_counts.get(c, 0)
 
     return sorted(
@@ -224,8 +240,7 @@ async def get_ticker(db: AsyncSession = Depends(get_db)):
     since_7d  = datetime.utcnow() - timedelta(days=7)
 
     news_r = await db.execute(
-        select(NewsArticle)
-        .where(NewsArticle.published_at >= since_48h)
+        select(NewsArticle).where(NewsArticle.published_at >= since_48h)
         .order_by(NewsArticle.published_at.desc()).limit(20)
     )
     news = news_r.scalars().all()
@@ -237,7 +252,6 @@ async def get_ticker(db: AsyncSession = Depends(get_db)):
                     func.abs(MineralPrice.price_change_pct) >= 2.0))
         .order_by(MineralPrice.timestamp.desc()).limit(10)
     )
-
     trigger_r = await db.execute(
         select(AlertTrigger, PriceAlert, Mineral.name_zh, Mineral.name)
         .join(PriceAlert, PriceAlert.id == AlertTrigger.alert_id)
@@ -262,7 +276,6 @@ async def get_ticker(db: AsyncSession = Depends(get_db)):
         label = cat_zh.get(n.category or "", "资讯")
         items.append({"type": "news", "text": f"[{label}] {n.title}",
                       "url": n.url, "ts": n.published_at.isoformat() if n.published_at else ""})
-
     items.sort(key=lambda x: x.get("ts", ""), reverse=True)
     return items[:30]
 
@@ -284,7 +297,8 @@ async def get_country_detail(country_name: str, db: AsyncSession = Depends(get_d
 
     country_minerals = []
     for m in all_minerals:
-        if country_name not in [_norm(p) for p in (m.top_producers or [])]:
+        producers_norm = [_norm(p) for p in (m.top_producers or [])]
+        if country_name not in producers_norm:
             continue
         price_r = await db.execute(
             select(MineralPrice).where(MineralPrice.mineral_id == m.id)
@@ -295,8 +309,10 @@ async def get_country_detail(country_name: str, db: AsyncSession = Depends(get_d
             "id": m.id, "name": m.name, "name_zh": m.name_zh,
             "symbol": m.symbol, "category": m.category,
             "criticality_score": m.criticality_score,
-            "latest_price": {"price": lp.price, "price_change_pct": lp.price_change_pct,
-                             "unit": lp.unit, "timestamp": lp.timestamp.isoformat()} if lp else None,
+            "latest_price": {
+                "price": lp.price, "price_change_pct": lp.price_change_pct,
+                "unit": lp.unit, "timestamp": lp.timestamp.isoformat(),
+            } if lp else None,
         })
 
     news_r = await db.execute(
@@ -314,7 +330,7 @@ async def get_country_detail(country_name: str, db: AsyncSession = Depends(get_d
 
     risk = _compute_risk(country_name, country_minerals, news_dicts, triggered_ids)
 
-    # Related countries
+    # Related countries: share same minerals
     related: dict[str, list] = {}
     for m_data in country_minerals:
         m_obj = next((m for m in all_minerals if m.id == m_data["id"]), None)
@@ -329,27 +345,44 @@ async def get_country_detail(country_name: str, db: AsyncSession = Depends(get_d
         key=lambda x: -len(x["shared_minerals"])
     )[:8]
 
+    # Companies — explicitly query snapshots to avoid async lazy-load error
     companies_r = await db.execute(
         select(Company).where(Company.country == country_name).limit(8)
     )
     companies = companies_r.scalars().all()
     company_list = []
     for co in companies:
-        snap = co.snapshots[0] if co.snapshots else None
+        snap_r = await db.execute(
+            select(CompanySnapshot)
+            .where(CompanySnapshot.company_id == co.id)
+            .order_by(CompanySnapshot.timestamp.desc())
+            .limit(1)
+        )
+        snap = snap_r.scalar_one_or_none()
         company_list.append({
             "id": co.id, "name": co.name, "name_zh": co.name_zh,
             "ticker": co.ticker, "exchange": co.exchange,
             "minerals_focus": co.minerals_focus,
-            "latest_snapshot": {"stock_price": snap.stock_price,
-                                "price_change_pct": snap.price_change_pct} if snap else None,
+            "latest_snapshot": {
+                "stock_price": snap.stock_price,
+                "price_change_pct": snap.price_change_pct,
+            } if snap else None,
         })
 
-    # Mineral share (by criticality weight)
-    total_crit = sum(m.get("criticality_score") or 0 for m in country_minerals) or 1
-    mineral_share = [
-        {"name": m["name_zh"] or m["name"], "value": round((m.get("criticality_score") or 1) / total_crit * 100)}
-        for m in sorted(country_minerals, key=lambda x: -(x.get("criticality_score") or 0))[:6]
-    ]
+    # Mineral share: country's estimated % of global production for each mineral
+    mineral_share = []
+    for m_data in sorted(country_minerals, key=lambda x: -(x.get("criticality_score") or 0))[:6]:
+        m_obj = next((m for m in all_minerals if m.id == m_data["id"]), None)
+        if not m_obj:
+            continue
+        share = _estimate_global_share(country_name, m_obj)
+        if share > 0:
+            mineral_share.append({
+                "name": m_data["name_zh"] or m_data["name"],
+                "symbol": m_data["symbol"],
+                "value": round(share),
+            })
+    mineral_share.sort(key=lambda x: -x["value"])
 
     return {
         "country": country_name,
