@@ -5,9 +5,12 @@ import { api } from '../../api/client'
 
 const PAGE_TITLES: Record<string, string> = {
   '/': '全球关键矿产风险态势',
-  '/prices': '矿产价格行情',
-  '/news': '全球资讯动态',
+  '/risk-forecast': '政策新闻推送',
+  '/risk-forecast/prices': '矿产价格行情',
   '/minerals': '矿产数据库',
+  '/companies': '矿企动态',
+  '/map': '分布地图',
+  '/briefing': '分析简报',
 }
 
 export default function Header() {

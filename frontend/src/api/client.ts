@@ -44,6 +44,7 @@ export const api = {
     level?: string
     mineral?: string
     country?: string
+    q?: string
     page?: number
     limit?: number
   }) => get<NewsArticle[]>('/news', params as Record<string, string | number | undefined>),
