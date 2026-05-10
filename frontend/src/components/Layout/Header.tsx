@@ -4,10 +4,14 @@ import { useMutation } from '@tanstack/react-query'
 import { api } from '../../api/client'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/': '总览仪表板',
-  '/prices': '矿产价格行情',
-  '/news': '全球资讯动态',
+  '/': '全球关键矿产风险态势',
+  '/risk-forecast': '政策新闻推送',
+  '/risk-forecast/prices': '矿产价格行情',
+  '/risk-deduction': '风险推演分析',
   '/minerals': '矿产数据库',
+  '/companies': '矿企动态',
+  '/map': '分布地图',
+  '/briefing': '分析简报',
 }
 
 export default function Header() {
@@ -19,10 +23,10 @@ export default function Header() {
   })
 
   return (
-    <header className="h-14 border-b border-slate-800 bg-slate-900/50 flex items-center justify-between px-6 shrink-0">
+    <header className="h-14 border-b border-stone-800 bg-stone-900/50 flex items-center justify-between px-6 shrink-0">
       <h1 className="font-semibold text-white">{title}</h1>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-500">
+        <span className="text-xs text-stone-500">
           {new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
         </span>
         <button

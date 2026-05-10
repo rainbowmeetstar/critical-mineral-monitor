@@ -66,6 +66,147 @@ export interface DashboardStats {
   }>
 }
 
+export interface CompanySnapshot {
+  stock_price: number | null
+  price_change_pct: number | null
+  market_cap_usd_bn: number | null
+  timestamp: string
+}
+
+export interface CompanyOut {
+  id: number
+  name: string
+  name_zh: string | null
+  ticker: string | null
+  exchange: string | null
+  country: string | null
+  minerals_focus: string[]
+  description: string | null
+  description_zh: string | null
+  website: string | null
+  latest_snapshot: CompanySnapshot | null
+}
+
+export interface ProducerMineralItem {
+  id: number
+  name: string
+  name_zh: string | null
+  symbol: string | null
+  category: string
+  criticality_score: number | null
+}
+
+export interface ProducerCountry {
+  country: string
+  lat: number
+  lng: number
+  mineral_count: number
+  minerals: ProducerMineralItem[]
+  influence_score: number
+  alert_level: 'critical' | 'high' | 'medium' | 'none'
+  recent_news_count: number
+}
+
+export interface TickerItem {
+  type: 'news' | 'price' | 'alert'
+  text: string
+  url?: string
+  ts: string
+}
+
+export interface CountryMineralItem extends ProducerMineralItem {
+  latest_price: {
+    price: number
+    price_change_pct: number | null
+    unit: string | null
+    timestamp: string
+  } | null
+}
+
+export interface CountryDetail {
+  country: string
+  minerals: CountryMineralItem[]
+  influence_score: number
+  risk: {
+    supply: number
+    price: number
+    geopolitical: number
+    industry: number
+    environmental: number
+    risk_score: number
+    risk_level: 'low' | 'medium' | 'high' | 'critical'
+  }
+  mineral_share: Array<{ name: string; value: number }>
+  mining_sites: Array<{ name: string; location: string; mineral: string; output: string }>
+  recent_news: Array<{
+    id: number; title: string; url: string | null; source: string | null
+    category: string | null; published_at: string | null; summary: string | null
+  }>
+  related_countries: Array<{ country: string; shared_minerals: string[] }>
+  companies: Array<{
+    id: number; name: string; name_zh: string | null; ticker: string | null
+    exchange: string | null; minerals_focus: string[]
+    latest_snapshot: { stock_price: number | null; price_change_pct: number | null } | null
+  }>
+}
+
+export interface PriceAlertOut {
+  id: number
+  mineral_id: number
+  mineral_name: string
+  mineral_name_zh: string | null
+  direction: 'above' | 'below'
+  threshold: number
+  note: string | null
+  active: boolean
+  created_at: string
+  last_triggered_at: string | null
+  trigger_count: number
+}
+
+export interface AlertTriggerOut {
+  id: number
+  alert_id: number
+  mineral_name: string
+  direction: 'above' | 'below'
+  threshold: number
+  price_at_trigger: number
+  triggered_at: string
+}
+
+export interface SignalItem {
+  label: string
+  value: string
+  score: number
+  direction: 'bull' | 'bear' | 'neutral'
+}
+
+export interface ForecastOut {
+  mineral_id: number
+  mineral_name: string
+  data_points: number
+  latest_price: number | null
+  ma7: number | null
+  ma30: number | null
+  ma90: number | null
+  rsi14: number | null
+  momentum_7d_pct: number | null
+  momentum_30d_pct: number | null
+  volatility_30d_pct: number | null
+  slope_pct_per_day: number | null
+  forecast_7d_low: number | null
+  forecast_7d_mid: number | null
+  forecast_7d_high: number | null
+  news_7d_total: number
+  news_30d_policy: number
+  news_30d_price: number
+  news_30d_exploration: number
+  composite_score: number
+  outlook: '看涨' | '温和看涨' | '中性' | '温和看跌' | '看跌' | '数据不足'
+  signal_breakdown: SignalItem[]
+  outlook_text: string
+}
+
 export type MineralCategory = 'rare_earth' | 'battery' | 'strategic' | 'pgm' | 'industrial'
 export type NewsCategory = 'policy' | 'industry' | 'price' | 'corporate' | 'exploration'
 export type NewsLevel = 'government' | 'industry_assoc' | 'corporate'

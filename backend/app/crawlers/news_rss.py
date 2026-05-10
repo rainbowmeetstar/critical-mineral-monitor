@@ -19,10 +19,21 @@ from .base import BaseCrawler
 
 logger = logging.getLogger(__name__)
 
+_GN = "https://news.google.com/rss/search?hl=en-US&gl=US&ceid=US:en&q="
+_GN_ZH = "https://news.google.com/rss/search?hl=zh-CN&gl=CN&ceid=CN:zh-Hans&q="
+
 RSS_SOURCES = [
+    # ── Established industry feeds ──
     {
         "url": "https://mining.com/feed/",
         "source": "Mining.com",
+        "category": "industry",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    {
+        "url": "https://www.miningweekly.com/rss/",
+        "source": "Mining Weekly",
         "category": "industry",
         "level": "industry_assoc",
         "country": "Global",
@@ -35,27 +46,122 @@ RSS_SOURCES = [
         "country": "Global",
     },
     {
-        "url": "https://www.miningweekly.com/rss/",
-        "source": "Mining Weekly",
-        "category": "industry",
-        "level": "industry_assoc",
-        "country": "Global",
-    },
-    {
-        "url": "https://rss.app/feeds/BzLVYAmpJWuiFmhQ.xml",
-        "source": "IEA Critical Minerals",
+        "url": "https://www.iea.org/rss/news.xml",
+        "source": "IEA",
         "category": "policy",
         "level": "government",
         "country": "International",
     },
     {
-        "url": "https://feeds.reuters.com/reuters/businessNews",
-        "source": "Reuters Business",
+        "url": "https://electrek.co/feed/",
+        "source": "Electrek",
         "category": "industry",
         "level": "industry_assoc",
         "country": "Global",
     },
+    # ── Google News: policy & regulation ──
+    {
+        "url": _GN + "critical+minerals+policy+government+regulation",
+        "source": "Google News",
+        "category": "policy",
+        "level": "government",
+        "country": "Global",
+    },
+    {
+        "url": _GN + "critical+minerals+export+controls+sanctions+legislation",
+        "source": "Google News",
+        "category": "policy",
+        "level": "government",
+        "country": "Global",
+    },
+    # ── Google News: Chinese policy (key signal source) ──
+    {
+        "url": _GN_ZH + "稀土+出口管制+关键矿产+政策",
+        "source": "Google News 中文",
+        "category": "policy",
+        "level": "government",
+        "country": "China",
+    },
+    # ── Google News: exploration & development ──
+    {
+        "url": _GN + "lithium+cobalt+%22rare+earth%22+exploration+drilling+discovery",
+        "source": "Google News",
+        "category": "exploration",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    {
+        "url": _GN + "critical+minerals+mine+feasibility+resource+estimate",
+        "source": "Google News",
+        "category": "exploration",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    # ── Google News: corporate ──
+    {
+        "url": _GN + "critical+minerals+mining+acquisition+merger+investment+%22joint+venture%22",
+        "source": "Google News",
+        "category": "corporate",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
+    # ── Google News: price & market ──
+    {
+        "url": _GN + "copper+lithium+cobalt+nickel+%22rare+earth%22+price+market+LME",
+        "source": "Google News",
+        "category": "price",
+        "level": "industry_assoc",
+        "country": "Global",
+    },
 ]
+
+# Keywords for content-based category classification
+CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "policy": [
+        "policy", "regulation", "legislation", "law", "act", "bill",
+        "government", "ministry", "department", "agency", "ban", "restriction",
+        "export control", "sanction", "tariff", "subsidy", "strategic reserve",
+        "national security", "executive order", "directive", "framework",
+        "quota", "embargo", "critical minerals strategy",
+        "出口管制", "政策", "法规", "禁令", "补贴", "战略储备", "管制",
+    ],
+    "exploration": [
+        "exploration", "drill", "drilling", "discovery", "deposit",
+        "resource estimate", "reserve", "feasibility", "prospect",
+        "geological survey", "ore body", "mineralization", "assay",
+        "inferred resource", "indicated resource", "PEA", "PFS", "DFS",
+        "borehole", "sampling", "outcrop",
+    ],
+    "corporate": [
+        "acquisition", "merger", "takeover", "buyout", "IPO", "listing",
+        "investment", "joint venture", "partnership", "stake",
+        "funding", "capital raise", "offtake", "MOU", "letter of intent",
+    ],
+    "price": [
+        "price", "prices", "spot", "futures", "trading",
+        "LME", "COMEX", "NYMEX", "SHFE", "rally", "surge",
+        "plunge", "decline", "all-time high", "market outlook",
+        "demand forecast", "supply deficit", "oversupply", "inventory",
+    ],
+    "industry": [
+        "production", "output", "capacity", "processing plant", "refinery",
+        "technology", "battery", "electric vehicle", "EV", "renewable",
+        "recycling", "supply chain", "shortage", "gigafactory", "smelter",
+    ],
+}
+
+
+def detect_category(title: str, summary: str, default: str) -> str:
+    """Score each category by keyword hits; return highest scorer or default."""
+    text = (title + " " + (summary or "")).lower()
+    scores = {cat: 0 for cat in CATEGORY_KEYWORDS}
+    for cat, keywords in CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in text:
+                scores[cat] += 1
+    best_cat, best_score = max(scores.items(), key=lambda x: x[1])
+    return best_cat if best_score > 0 else default
+
 
 # Keywords to detect mineral mentions in articles
 MINERAL_KEYWORDS = {
@@ -137,6 +243,8 @@ class NewsCrawler(BaseCrawler):
         feed = feedparser.parse(content)
         articles = []
 
+        is_google_news = "news.google.com" in cfg["url"]
+
         for entry in feed.entries[:20]:
             title = entry.get("title", "").strip()
             url = entry.get("link", "").strip()
@@ -145,13 +253,26 @@ class NewsCrawler(BaseCrawler):
             if not title or not url:
                 continue
 
+            # Google News embeds the publisher as " - Publisher" at the end of the title
+            # and also in entry.source.title
+            if is_google_news:
+                source_tag = entry.get("source", {})
+                real_source = (
+                    source_tag.get("title")
+                    or (title.rsplit(" - ", 1)[-1] if " - " in title else None)
+                    or cfg["source"]
+                )
+                title = title.rsplit(" - ", 1)[0].strip() if " - " in title else title
+            else:
+                real_source = cfg["source"]
+
             minerals = detect_minerals(title + " " + summary)
 
             articles.append({
                 "title": title[:500],
                 "url": url[:1000],
-                "source": cfg["source"],
-                "category": cfg["category"],
+                "source": real_source[:200],
+                "category": detect_category(title, summary, cfg["category"]),
                 "level": cfg["level"],
                 "country": cfg["country"],
                 "published_at": parse_date(entry),

@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -17,21 +17,25 @@ async def list_news(
     level: Optional[str] = Query(None, description="government|industry_assoc|corporate"),
     mineral: Optional[str] = Query(None, description="Filter by mineral name (e.g. Lithium)"),
     country: Optional[str] = None,
+    q: Optional[str] = Query(None, description="Keyword search on title and summary"),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(NewsArticle)
+    stmt = select(NewsArticle)
     if category:
-        q = q.where(NewsArticle.category == category)
+        stmt = stmt.where(NewsArticle.category == category)
     if level:
-        q = q.where(NewsArticle.level == level)
+        stmt = stmt.where(NewsArticle.level == level)
     if country:
-        q = q.where(NewsArticle.country.ilike(f"%{country}%"))
-    q = q.order_by(desc(NewsArticle.published_at))
-    q = q.offset((page - 1) * limit).limit(limit)
+        stmt = stmt.where(NewsArticle.country.ilike(f"%{country}%"))
+    if q:
+        kw = f"%{q}%"
+        stmt = stmt.where(or_(NewsArticle.title.ilike(kw), NewsArticle.summary.ilike(kw)))
+    stmt = stmt.order_by(desc(NewsArticle.published_at))
+    stmt = stmt.offset((page - 1) * limit).limit(limit)
 
-    result = await db.execute(q)
+    result = await db.execute(stmt)
     articles = result.scalars().all()
 
     if mineral:
