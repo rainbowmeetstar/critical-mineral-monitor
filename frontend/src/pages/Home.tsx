@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  MapContainer, TileLayer, CircleMarker, Polyline, Popup, useMap,
+  MapContainer, TileLayer, CircleMarker, Polyline, Polygon, Popup, useMap, GeoJSON,
 } from 'react-leaflet'
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -17,57 +17,72 @@ import {
 // ── Static data ────────────────────────────────────────────────────────────────
 
 const CONTINENTS = [
-  { label: '全球',  center: [20,   0]   as [number,number], zoom: 2 },
-  { label: '亚洲',  center: [35,  100]  as [number,number], zoom: 3 },
-  { label: '欧洲',  center: [54,  15]   as [number,number], zoom: 4 },
-  { label: '非洲',  center: [-5,  22]   as [number,number], zoom: 3 },
-  { label: '北美',  center: [45, -100]  as [number,number], zoom: 3 },
-  { label: '南美',  center: [-15, -60]  as [number,number], zoom: 3 },
-  { label: '大洋洲',center: [-25, 135]  as [number,number], zoom: 4 },
+  { label: '全球',   center: [20,   0]  as [number,number], zoom: 2 },
+  { label: '亚洲',   center: [35, 100]  as [number,number], zoom: 3 },
+  { label: '欧洲',   center: [54,  15]  as [number,number], zoom: 4 },
+  { label: '非洲',   center: [-5,  22]  as [number,number], zoom: 3 },
+  { label: '北美',   center: [45,-100]  as [number,number], zoom: 3 },
+  { label: '南美',   center: [-15,-60]  as [number,number], zoom: 3 },
+  { label: '大洋洲', center: [-25, 135] as [number,number], zoom: 4 },
 ]
 
-// from: [lat,lng], to: [lat,lng], mineral, volume (1-4), color
 const TRADE_FLOWS = [
-  { from:[35.86,104.19], to:[37.09,-95.71], label:'REE → 美国',      mineral:'稀土', volume:4, color:'#f97316' },
-  { from:[35.86,104.19], to:[51.16,10.45],  label:'REE/锂 → 欧洲',   mineral:'稀土·锂', volume:3, color:'#f97316' },
-  { from:[35.86,104.19], to:[36.20,138.25], label:'稀土 → 日本',      mineral:'稀土', volume:3, color:'#f97316' },
-  { from:[-25.27,133.77],to:[35.86,104.19], label:'锂精矿 → 中国',    mineral:'锂', volume:4, color:'#a78bfa' },
-  { from:[-4.04,21.76],  to:[35.86,104.19], label:'钴 → 中国',        mineral:'钴', volume:4, color:'#60a5fa' },
-  { from:[-35.67,-71.54],to:[35.86,104.19], label:'铜/锂 → 中国',     mineral:'铜·锂', volume:3, color:'#34d399' },
-  { from:[-35.67,-71.54],to:[37.09,-95.71], label:'铜 → 美国',        mineral:'铜', volume:2, color:'#34d399' },
-  { from:[-30.56,22.94], to:[36.20,138.25], label:'PGM → 日本',       mineral:'铂族', volume:2, color:'#fbbf24' },
-  { from:[-30.56,22.94], to:[51.16,10.45],  label:'PGM → 欧洲',       mineral:'铂族', volume:2, color:'#fbbf24' },
-  { from:[-0.79,113.92], to:[35.86,104.19], label:'镍 → 中国',        mineral:'镍', volume:3, color:'#06b6d4' },
-  { from:[61.52,105.32], to:[51.16,10.45],  label:'钯金/镍 → 欧洲',   mineral:'钯·镍', volume:2, color:'#e879f9' },
-  { from:[56.13,-106.35],to:[37.09,-95.71], label:'矿产 → 美国',      mineral:'铀·镍', volume:2, color:'#34d399' },
-  { from:[48.02,66.92],  to:[35.86,104.19], label:'铀/铬 → 中国',     mineral:'铀·铬', volume:2, color:'#fbbf24' },
+  { from:[35.86,104.19] as [number,number], to:[37.09,-95.71] as [number,number], label:'REE → 美国',     mineral:'稀土',    volume:4, color:'#f97316' },
+  { from:[35.86,104.19] as [number,number], to:[51.16,10.45]  as [number,number], label:'REE/锂 → 欧洲',  mineral:'稀土·锂', volume:3, color:'#f97316' },
+  { from:[35.86,104.19] as [number,number], to:[36.20,138.25] as [number,number], label:'稀土 → 日本',    mineral:'稀土',    volume:3, color:'#f97316' },
+  { from:[-25.27,133.77]as [number,number], to:[35.86,104.19] as [number,number], label:'锂精矿 → 中国',   mineral:'锂',      volume:4, color:'#a78bfa' },
+  { from:[-4.04,21.76]  as [number,number], to:[35.86,104.19] as [number,number], label:'钴 → 中国',      mineral:'钴',      volume:4, color:'#60a5fa' },
+  { from:[-35.67,-71.54]as [number,number], to:[35.86,104.19] as [number,number], label:'铜/锂 → 中国',   mineral:'铜·锂',   volume:3, color:'#34d399' },
+  { from:[-35.67,-71.54]as [number,number], to:[37.09,-95.71] as [number,number], label:'铜 → 美国',      mineral:'铜',      volume:2, color:'#34d399' },
+  { from:[-30.56,22.94] as [number,number], to:[36.20,138.25] as [number,number], label:'PGM → 日本',     mineral:'铂族',    volume:2, color:'#fbbf24' },
+  { from:[-30.56,22.94] as [number,number], to:[51.16,10.45]  as [number,number], label:'PGM → 欧洲',     mineral:'铂族',    volume:2, color:'#fbbf24' },
+  { from:[-0.79,113.92] as [number,number], to:[35.86,104.19] as [number,number], label:'镍 → 中国',      mineral:'镍',      volume:3, color:'#06b6d4' },
+  { from:[61.52,105.32] as [number,number], to:[51.16,10.45]  as [number,number], label:'钯金/镍 → 欧洲', mineral:'钯·镍',   volume:2, color:'#e879f9' },
+  { from:[56.13,-106.35]as [number,number], to:[37.09,-95.71] as [number,number], label:'矿产 → 美国',    mineral:'铀·镍',   volume:2, color:'#34d399' },
+  { from:[48.02,66.92]  as [number,number], to:[35.86,104.19] as [number,number], label:'铀/铬 → 中国',   mineral:'铀·铬',   volume:2, color:'#fbbf24' },
+]
+
+// Map our country keys to GeoJSON feature names
+const COUNTRY_GEO_ALIASES: Record<string, string[]> = {
+  "United States":  ["United States of America", "USA"],
+  "DRC":            ["Dem. Rep. Congo", "Democratic Republic of the Congo", "Congo, Dem. Rep.", "DR Congo"],
+  "South Korea":    ["Republic of Korea", "S. Korea", "Korea, South"],
+  "Russia":         ["Russian Federation"],
+  "UK":             ["United Kingdom"],
+  "Myanmar":        ["Burma"],
+  "Germany":        ["Deutschland"],
+}
+
+const MINERAL_PALETTE = [
+  '#f97316','#a78bfa','#34d399','#60a5fa','#fbbf24',
+  '#06b6d4','#e879f9','#84cc16','#fb7185','#38bdf8',
 ]
 
 const ALERT_COLOR: Record<string, string> = {
-  critical:'#dc2626', high:'#ea580c', medium:'#d97706', none:'#475569',
+  critical: '#dc2626', high: '#ea580c', medium: '#d97706', none: '#475569',
 }
 const MINERAL_CAT_COLOR: Record<string, string> = {
-  rare_earth:'#a78bfa', battery:'#34d399', strategic:'#60a5fa',
-  pgm:'#fbbf24', industrial:'#94a3b8',
+  rare_earth: '#a78bfa', battery: '#34d399', strategic: '#60a5fa',
+  pgm: '#fbbf24', industrial: '#94a3b8',
 }
 const CAT_ZH: Record<string,string> = {
   policy:'政策', industry:'行业', price:'价格', corporate:'企业', exploration:'勘探',
 }
 const CAT_COLOR: Record<string,string> = {
-  policy:'bg-purple-500/20 text-purple-400',
-  industry:'bg-orange-500/20 text-orange-400',
-  price:'bg-amber-500/20 text-amber-400',
-  corporate:'bg-emerald-500/20 text-emerald-400',
-  exploration:'bg-sky-500/20 text-sky-400',
+  policy:      'bg-purple-500/20 text-purple-400',
+  industry:    'bg-orange-500/20 text-orange-400',
+  price:       'bg-amber-500/20 text-amber-400',
+  corporate:   'bg-emerald-500/20 text-emerald-400',
+  exploration: 'bg-sky-500/20 text-sky-400',
 }
-const RISK_COLOR: Record<string,string> = {
+const RISK_COLOR:  Record<string,string> = {
   critical:'text-red-400', high:'text-orange-400', medium:'text-amber-400', low:'text-emerald-400',
 }
 const RISK_BG: Record<string,string> = {
   critical:'bg-red-500/20 border-red-500/30',
-  high:'bg-orange-500/20 border-orange-500/30',
-  medium:'bg-amber-500/20 border-amber-500/30',
-  low:'bg-emerald-500/20 border-emerald-500/30',
+  high:    'bg-orange-500/20 border-orange-500/30',
+  medium:  'bg-amber-500/20 border-amber-500/30',
+  low:     'bg-emerald-500/20 border-emerald-500/30',
 }
 const RISK_LABEL: Record<string,string> = { critical:'高', high:'中高', medium:'中', low:'低' }
 const PIE_COLORS = ['#f97316','#a78bfa','#34d399','#60a5fa','#fbbf24','#06b6d4']
@@ -76,14 +91,14 @@ type LayerId = 'influence'|'alert'|'risk'|'trade'|'mineral'
 
 // ── Bezier curve helper ────────────────────────────────────────────────────────
 
-function bezierPath(from:[number,number], to:[number,number]): [number,number][] {
+function bezierPath(from: [number,number], to: [number,number]): [number,number][] {
   const midLat = (from[0]+to[0])/2
   const midLng = (from[1]+to[1])/2
   const dist = Math.sqrt((to[0]-from[0])**2 + (to[1]-from[1])**2)
   const ctrl: [number,number] = [midLat + dist*0.22, midLng]
   const pts: [number,number][] = []
-  for (let i=0; i<=40; i++) {
-    const t=i/40
+  for (let i = 0; i <= 40; i++) {
+    const t = i/40
     pts.push([
       (1-t)*(1-t)*from[0] + 2*(1-t)*t*ctrl[0] + t*t*to[0],
       (1-t)*(1-t)*from[1] + 2*(1-t)*t*ctrl[1] + t*t*to[1],
@@ -92,41 +107,97 @@ function bezierPath(from:[number,number], to:[number,number]): [number,number][]
   return pts
 }
 
+// Returns the three vertices of an arrowhead triangle at the end of a path
+function arrowhead(path: [number,number][]): [number,number][] {
+  const n = path.length
+  const [lat1, lng1] = path[Math.max(0, n-8)]
+  const [lat2, lng2] = path[n-1]
+  const dlat = lat2 - lat1, dlng = lng2 - lng1
+  const len = Math.sqrt(dlat**2 + dlng**2)
+  if (len < 0.001) return [[lat2,lng2],[lat2,lng2],[lat2,lng2]]
+  const ul = dlat/len, ul2 = dlng/len
+  const s = Math.max(1.5, len*0.12), t = s*0.55
+  return [
+    [lat2, lng2],
+    [lat2 - ul*s - ul2*t,  lng2 - ul2*s + ul*t],
+    [lat2 - ul*s + ul2*t,  lng2 - ul2*s - ul*t],
+  ]
+}
+
 // ── Map controller ─────────────────────────────────────────────────────────────
 
-function MapController({ center, zoom }:{ center:[number,number]; zoom:number }) {
+function MapController({ center, zoom }: { center:[number,number]; zoom:number }) {
   const map = useMap()
-  useEffect(()=>{ map.setView(center, zoom, { animate:true, duration:0.8 }) }, [center,zoom,map])
+  useEffect(() => { map.setView(center, zoom, { animate:true, duration:0.8 }) }, [center,zoom,map])
   return null
+}
+
+// ── Risk choropleth (GeoJSON fill) ─────────────────────────────────────────────
+
+function RiskChoropleth({ producers, visible }: { producers:ProducerCountry[]; visible:boolean }) {
+  const [geoData, setGeoData] = useState<any>(null)
+
+  useEffect(() => {
+    if (!visible || geoData) return
+    fetch('https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson')
+      .then(r => r.json()).then(setGeoData).catch(console.error)
+  }, [visible, geoData])
+
+  const producerByGeoName = useMemo(() => {
+    const m = new Map<string, ProducerCountry>()
+    producers.forEach(p => {
+      m.set(p.country, p)
+      const aliases = COUNTRY_GEO_ALIASES[p.country] ?? []
+      aliases.forEach(a => m.set(a, p))
+    })
+    return m
+  }, [producers])
+
+  if (!visible || !geoData) return null
+
+  // Key forces GeoJSON layer to re-style when data changes
+  const styleKey = producers.map(p => p.alert_level).join()
+
+  const style = (feature: any) => {
+    const name: string = feature?.properties?.name ?? ''
+    const producer = producerByGeoName.get(name)
+    if (!producer || producer.alert_level === 'none') {
+      return { fillOpacity: 0, weight: 0, stroke: false as any }
+    }
+    const color = ALERT_COLOR[producer.alert_level] ?? 'transparent'
+    return { fillColor: color, fillOpacity: 0.28, color, weight: 1, opacity: 0.6 }
+  }
+
+  return <GeoJSON key={styleKey} data={geoData} style={style} />
 }
 
 // ── Vertical news ticker ───────────────────────────────────────────────────────
 
-function NewsTicker({ items }:{ items:TickerItem[] }) {
+function NewsTicker({ items }: { items:TickerItem[] }) {
   const [idx, setIdx] = useState(0)
   const [visible, setVisible] = useState(true)
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!items.length) return
-    const t = setInterval(()=>{
+    const t = setInterval(() => {
       setVisible(false)
-      setTimeout(()=>{ setIdx(i=>(i+1)%items.length); setVisible(true) }, 350)
+      setTimeout(() => { setIdx(i => (i+1) % items.length); setVisible(true) }, 350)
     }, 3000)
-    return ()=>clearInterval(t)
+    return () => clearInterval(t)
   }, [items.length])
 
   const item = items[idx]
   const typeStyle: Record<string,string> = {
-    alert:'text-red-400 border-red-500/40 bg-red-500/10',
-    price:'text-amber-400 border-amber-500/40 bg-amber-500/10',
-    news:'text-orange-300 border-orange-500/40 bg-orange-500/10',
+    alert: 'text-red-400 border-red-500/40 bg-red-500/10',
+    price: 'text-amber-400 border-amber-500/40 bg-amber-500/10',
+    news:  'text-orange-300 border-orange-500/40 bg-orange-500/10',
   }
   const typeLabel: Record<string,string> = { alert:'⚠ 预警', price:'价格变动', news:'最新态势' }
 
   return (
     <div className="h-9 shrink-0 bg-stone-950 border-b border-stone-800 flex items-center px-4 gap-3 overflow-hidden">
       <span className="text-xs font-bold text-orange-400 shrink-0 flex items-center gap-1">
-        <Zap className="w-3 h-3" />最新动态
+        <Zap className="w-3 h-3"/>最新动态
       </span>
       <div className={`h-5 px-1.5 rounded text-xs font-semibold border shrink-0 flex items-center ${typeStyle[item?.type??'news']??typeStyle.news}`}>
         {typeLabel[item?.type??'news']}
@@ -141,7 +212,7 @@ function NewsTicker({ items }:{ items:TickerItem[] }) {
         }
       </div>
       <span className="text-xs text-stone-600 shrink-0">
-        {items.length>0 ? `${idx+1} / ${items.length}` : ''}
+        {items.length > 0 ? `${idx+1} / ${items.length}` : ''}
       </span>
     </div>
   )
@@ -158,15 +229,19 @@ const LAYER_CFG: { id:LayerId; label:string; desc:string; color:string }[] = [
 ]
 
 function LayerPanel({
-  active, onToggle, minerals, selectedMinerals, onToggleMineral,
-}:{
-  active:Set<LayerId>; onToggle:(l:LayerId)=>void
-  minerals:{id:number;name:string;name_zh:string|null;symbol:string|null}[]
-  selectedMinerals:Set<number>; onToggleMineral:(id:number)=>void
+  active, onToggle,
+  minerals, selectedMinerals, onToggleMineral, mineralColorMap,
+}: {
+  active: Set<LayerId>; onToggle: (l:LayerId) => void
+  minerals: { id:number; name:string; name_zh:string|null; symbol:string|null }[]
+  selectedMinerals: Set<number>; onToggleMineral: (id:number) => void
+  mineralColorMap: Map<number, string>
 }) {
   const [search, setSearch] = useState('')
-  const filtered = minerals.filter(m=>
-    !search || (m.name_zh??m.name).toLowerCase().includes(search.toLowerCase()) || (m.symbol??'').toLowerCase().includes(search.toLowerCase())
+  const filtered = minerals.filter(m =>
+    !search ||
+    (m.name_zh??m.name).toLowerCase().includes(search.toLowerCase()) ||
+    (m.symbol??'').toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -174,13 +249,14 @@ function LayerPanel({
       <div className="px-3 py-2.5 border-b border-stone-800">
         <div className="text-xs font-bold text-stone-400 uppercase tracking-widest">图层控制（可多选）</div>
       </div>
+
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
-        {LAYER_CFG.map((l,i)=>{
+        {LAYER_CFG.map((l, i) => {
           const on = active.has(l.id)
           return (
             <div key={l.id}>
               <button
-                onClick={()=>onToggle(l.id)}
+                onClick={() => onToggle(l.id)}
                 className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg transition-all text-left ${on?'bg-stone-800':'hover:bg-stone-900'}`}
               >
                 <span className={`w-5 h-5 rounded shrink-0 flex items-center justify-center text-xs font-bold text-white ${l.color}`}>{i+1}</span>
@@ -192,31 +268,47 @@ function LayerPanel({
                   <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on?'left-4':'left-0.5'}`}/>
                 </div>
               </button>
-              {l.id==='mineral' && on && (
+
+              {/* Mineral sub-panel */}
+              {l.id === 'mineral' && on && (
                 <div className="ml-2 mt-1 mb-1 space-y-1">
                   <input
                     className="w-full px-2 py-1 text-xs bg-stone-800 border border-stone-700 rounded text-stone-300 placeholder-stone-600 focus:outline-none focus:border-orange-500"
                     placeholder="搜索矿产"
                     value={search}
-                    onChange={e=>setSearch(e.target.value)}
+                    onChange={e => setSearch(e.target.value)}
                   />
-                  {selectedMinerals.size>0 && (
+                  {selectedMinerals.size > 0 && (
                     <div className="text-xs text-stone-500 flex justify-between px-1">
-                      <span>已选 {selectedMinerals.size}/{minerals.length}</span>
-                      <button className="text-orange-400 hover:text-orange-300" onClick={()=>minerals.forEach(m=>{ if(selectedMinerals.has(m.id)) onToggleMineral(m.id) })}>清空</button>
+                      <span>已选 {selectedMinerals.size}</span>
+                      <button
+                        className="text-orange-400 hover:text-orange-300"
+                        onClick={() => minerals.forEach(m => { if (selectedMinerals.has(m.id)) onToggleMineral(m.id) })}
+                      >清空</button>
                     </div>
                   )}
                   <div className="max-h-44 overflow-y-auto space-y-0.5 pr-0.5">
-                    {filtered.map(m=>(
-                      <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-stone-800 cursor-pointer">
-                        <input type="checkbox" checked={selectedMinerals.has(m.id)}
-                          onChange={()=>onToggleMineral(m.id)}
-                          className="accent-orange-500 w-3 h-3"
-                        />
-                        <span className={`text-xs font-mono w-6 shrink-0 ${MINERAL_CAT_COLOR[m.symbol??'']??'text-stone-500'}`}>{m.symbol}</span>
-                        <span className="text-xs text-stone-300">{m.name_zh??m.name}</span>
-                      </label>
-                    ))}
+                    {filtered.map(m => {
+                      const checked = selectedMinerals.has(m.id)
+                      const color = mineralColorMap.get(m.id)
+                      return (
+                        <label key={m.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-stone-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => onToggleMineral(m.id)}
+                            className="w-3 h-3"
+                            style={{ accentColor: color ?? '#f97316' }}
+                          />
+                          {checked && color
+                            ? <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }}/>
+                            : <span className="w-2 h-2 rounded-full shrink-0 bg-stone-700"/>
+                          }
+                          <span className="text-xs font-mono w-6 shrink-0 text-stone-500">{m.symbol}</span>
+                          <span className="text-xs text-stone-300">{m.name_zh??m.name}</span>
+                        </label>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -226,38 +318,61 @@ function LayerPanel({
       </div>
 
       {/* Legend */}
-      <div className="px-3 py-3 border-t border-stone-800 space-y-3">
+      <div className="px-3 py-3 border-t border-stone-800 space-y-3 shrink-0">
         <div className="text-xs font-bold text-stone-600 uppercase tracking-widest">图例说明</div>
+
         {active.has('influence') && (
           <div className="space-y-1">
-            <div className="text-xs text-stone-600 mb-0.5">影响力（综合影响力指数）</div>
-            {[['极高 (80-100)','w-5 h-5 opacity-95'],['高 (60-80)','w-4 h-4 opacity-75'],['中 (40-60)','w-3 h-3 opacity-55'],['低 (0-40)','w-2 h-2 opacity-40']].map(([l,c])=>(
+            <div className="text-xs text-stone-600 mb-0.5">影响力（综合指数）</div>
+            {[['极高(80-100)','w-5 h-5','opacity-95'],['高(60-80)','w-4 h-4','opacity-75'],['中(40-60)','w-3 h-3','opacity-55'],['低(0-40)','w-2 h-2','opacity-40']].map(([l,c,o])=>(
               <div key={l} className="flex items-center gap-2 text-xs text-stone-500">
-                <span className={`${c} rounded-full bg-orange-500 shrink-0 inline-block`}/>
+                <span className={`${c} ${o} rounded-full bg-orange-500 shrink-0 inline-block`}/>
                 {l}
               </div>
             ))}
           </div>
         )}
-        {(active.has('alert')||active.has('risk')) && (
+
+        {(active.has('alert') || active.has('risk')) && (
           <div className="space-y-1">
-            <div className="text-xs text-stone-600 mb-0.5">区域风险</div>
-            {[['bg-red-500','高度警报（高风险）'],['bg-orange-500','风险升高（中-高风险）'],['bg-amber-500','持续监测']].map(([c,l])=>(
+            <div className="text-xs text-stone-600 mb-0.5">区域风险（地图填色）</div>
+            {[['bg-red-500','高度警报'],['bg-orange-500','风险升高'],['bg-amber-500','持续监测']].map(([c,l])=>(
               <div key={l} className="flex items-center gap-2 text-xs text-stone-500">
-                <span className={`w-3 h-3 rounded-full ${c} shrink-0`}/>{l}
+                <span className={`w-3 h-3 rounded-sm ${c} opacity-60 shrink-0`}/>{l}
               </div>
             ))}
           </div>
         )}
+
         {active.has('trade') && (
           <div className="space-y-1">
-            <div className="text-xs text-stone-600 mb-0.5">贸易流动量（年贸易额）</div>
+            <div className="text-xs text-stone-600 mb-0.5">贸易流动（带箭头）</div>
             {[['#f97316','稀土供应链'],['#a78bfa','锂矿贸易'],['#34d399','铜矿流向'],['#60a5fa','钴镍流向'],['#fbbf24','铂族金属']].map(([c,l])=>(
               <div key={l} className="flex items-center gap-2 text-xs text-stone-500">
                 <span className="w-5 h-0.5 shrink-0" style={{background:c}}/>
                 {l}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Per-mineral color legend */}
+        {active.has('mineral') && selectedMinerals.size > 0 && (
+          <div className="space-y-1">
+            <div className="text-xs text-stone-600 mb-0.5">矿产分布（各色区分）</div>
+            {minerals
+              .filter(m => selectedMinerals.has(m.id))
+              .map(m => {
+                const color = mineralColorMap.get(m.id) ?? '#fff'
+                return (
+                  <div key={m.id} className="flex items-center gap-2 text-xs text-stone-400">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{background:color}}/>
+                    <span className="font-mono text-stone-500 w-6 shrink-0">{m.symbol}</span>
+                    {m.name_zh??m.name}
+                  </div>
+                )
+              })
+            }
           </div>
         )}
       </div>
@@ -267,7 +382,7 @@ function LayerPanel({
 
 // ── Risk radar chart ───────────────────────────────────────────────────────────
 
-function RiskRadar({ data }:{ data:{supply:number;price:number;geopolitical:number;industry:number;environmental:number} }) {
+function RiskRadar({ data }: { data:{supply:number;price:number;geopolitical:number;industry:number;environmental:number} }) {
   const radarData = [
     { label:'供应风险', value:data.supply },
     { label:'价格风险', value:data.price },
@@ -278,10 +393,10 @@ function RiskRadar({ data }:{ data:{supply:number;price:number;geopolitical:numb
   return (
     <ResponsiveContainer width="100%" height={160}>
       <RadarChart data={radarData} margin={{top:10,right:20,bottom:10,left:20}}>
-        <PolarGrid stroke="#44403c" />
-        <PolarAngleAxis dataKey="label" tick={{ fill:'#78716c', fontSize:10 }} />
-        <PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false} />
-        <Radar dataKey="value" stroke="#f97316" fill="#f97316" fillOpacity={0.25} strokeWidth={1.5} />
+        <PolarGrid stroke="#44403c"/>
+        <PolarAngleAxis dataKey="label" tick={{ fill:'#78716c', fontSize:10 }}/>
+        <PolarRadiusAxis domain={[0,100]} tick={false} axisLine={false}/>
+        <Radar dataKey="value" stroke="#f97316" fill="#f97316" fillOpacity={0.25} strokeWidth={1.5}/>
       </RadarChart>
     </ResponsiveContainer>
   )
@@ -289,19 +404,19 @@ function RiskRadar({ data }:{ data:{supply:number;price:number;geopolitical:numb
 
 // ── Mineral share donut ────────────────────────────────────────────────────────
 
-function MineralDonut({ data }:{ data:{name:string;value:number}[] }) {
+function MineralDonut({ data }: { data:{name:string;value:number}[] }) {
   return (
     <div className="flex items-center gap-3">
       <ResponsiveContainer width={80} height={80}>
         <PieChart>
           <Pie data={data} cx="50%" cy="50%" innerRadius={24} outerRadius={36} dataKey="value" strokeWidth={0}>
-            {data.map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]} />)}
+            {data.map((_,i) => <Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}
           </Pie>
-          <RcTooltip formatter={(v:number)=>[`${v}%`]} contentStyle={{background:'#1c1917',border:'1px solid #44403c',borderRadius:6,fontSize:11}} />
+          <RcTooltip formatter={(v:number) => [`${v}%`]} contentStyle={{background:'#1c1917',border:'1px solid #44403c',borderRadius:6,fontSize:11}}/>
         </PieChart>
       </ResponsiveContainer>
       <div className="flex-1 space-y-1">
-        {data.map((d,i)=>(
+        {data.map((d,i) => (
           <div key={d.name} className="flex items-center gap-1.5 text-xs">
             <span className="w-2 h-2 rounded-full shrink-0" style={{background:PIE_COLORS[i%PIE_COLORS.length]}}/>
             <span className="text-stone-400 flex-1 truncate">{d.name}</span>
@@ -313,17 +428,16 @@ function MineralDonut({ data }:{ data:{name:string;value:number}[] }) {
   )
 }
 
-// ── Simple relationship graph ──────────────────────────────────────────────────
+// ── Relationship graph ─────────────────────────────────────────────────────────
 
-function RelationGraph({ center, related }:{ center:string; related:{country:string;shared_minerals:string[]}[] }) {
-  const nodes = related.slice(0,6)
+function RelationGraph({ center, related }: { center:string; related:{country:string;shared_minerals:string[]}[] }) {
+  const nodes = related.slice(0, 6)
   const r = 68, cx = 110, cy = 90
   return (
     <svg width={220} height={180} className="w-full">
-      {nodes.map((n,i)=>{
+      {nodes.map((n, i) => {
         const angle = (i/nodes.length)*2*Math.PI - Math.PI/2
-        const x = cx + r*Math.cos(angle)
-        const y = cy + r*Math.sin(angle)
+        const x = cx + r*Math.cos(angle), y = cy + r*Math.sin(angle)
         return (
           <g key={n.country}>
             <line x1={cx} y1={cy} x2={x} y2={y} stroke="#f97316" strokeWidth={1} strokeOpacity={0.35} strokeDasharray="3 2"/>
@@ -347,7 +461,7 @@ function RelationGraph({ center, related }:{ center:string; related:{country:str
 
 // ── Country detail panel ───────────────────────────────────────────────────────
 
-function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; onClose:()=>void }) {
+function CountryPanel({ country, onClose }: { country:string; alertLevel:string; onClose:()=>void }) {
   const { data, isLoading } = useQuery({
     queryKey: ['country', country],
     queryFn: () => api.getCountryDetail(country),
@@ -355,7 +469,6 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
 
   return (
     <div className="w-80 shrink-0 bg-stone-950 border-l border-stone-800 flex flex-col overflow-hidden">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-stone-800 shrink-0 flex items-start justify-between">
         <div>
           <h2 className="font-bold text-white text-base leading-tight">{country}</h2>
@@ -372,7 +485,9 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
 
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center text-stone-600 text-sm">加载中...</div>
-      ) : !data ? null : (
+      ) : !data ? (
+        <div className="flex-1 flex items-center justify-center text-stone-700 text-xs px-4 text-center">暂无详细数据</div>
+      ) : (
         <div className="flex-1 overflow-y-auto divide-y divide-stone-800">
 
           {/* Risk score + radar */}
@@ -384,7 +499,7 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
               </div>
               <div className="flex-1">
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
-                  {[['供应',data.risk.supply],['价格',data.risk.price],['地缘',data.risk.geopolitical],['产业',data.risk.industry]].map(([l,v])=>(
+                  {[['供应',data.risk.supply],['价格',data.risk.price],['地缘',data.risk.geopolitical],['产业',data.risk.industry]].map(([l,v]) => (
                     <div key={String(l)} className="flex items-center gap-1">
                       <span className="text-stone-500 w-6">{l}</span>
                       <div className="flex-1 h-1 bg-stone-800 rounded-full overflow-hidden">
@@ -402,9 +517,7 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
           {/* Mineral share */}
           {data.mineral_share.length > 0 && (
             <section className="px-4 py-3">
-              <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
-                关键矿产占比（全球供应占比）
-              </div>
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">关键矿产占比</div>
               <MineralDonut data={data.mineral_share}/>
             </section>
           )}
@@ -413,10 +526,10 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
           {data.mining_sites.length > 0 && (
             <section className="px-4 py-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <MapPin className="w-3 h-3"/>矿产基地（主要矿区）
+                <MapPin className="w-3 h-3"/>矿产基地
               </div>
               <div className="space-y-2">
-                {data.mining_sites.map(s=>(
+                {data.mining_sites.map(s => (
                   <div key={s.name} className="flex items-start gap-2">
                     <span className="w-2 h-2 rounded-full bg-orange-500 mt-1.5 shrink-0"/>
                     <div className="flex-1 min-w-0">
@@ -430,18 +543,18 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
             </section>
           )}
 
-          {/* Minerals list */}
+          {/* Minerals */}
           {data.minerals.length > 0 && (
             <section className="px-4 py-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">矿产资源</div>
               <div className="grid grid-cols-2 gap-1.5">
-                {data.minerals.map(m=>{
+                {data.minerals.map(m => {
                   const pct = m.latest_price?.price_change_pct
                   return (
                     <div key={m.id} className="flex items-center gap-1.5 bg-stone-900 rounded px-2 py-1.5">
                       <span className="text-xs font-mono w-6 shrink-0" style={{color:MINERAL_CAT_COLOR[m.category??'']??'#78716c'}}>{m.symbol}</span>
                       <span className="text-xs text-stone-300 flex-1 truncate">{m.name_zh??m.name}</span>
-                      {pct!=null && (
+                      {pct != null && (
                         <span className={`text-xs font-medium ${pct>=0?'text-emerald-400':'text-red-400'}`}>
                           {pct>=0?'+':''}{pct.toFixed(1)}%
                         </span>
@@ -457,22 +570,20 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
           {data.recent_news.length > 0 && (
             <section className="px-4 py-3">
               <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <Newspaper className="w-3 h-3"/>当前事件（最新动态）
+                <Newspaper className="w-3 h-3"/>当前事件
               </div>
               <div className="space-y-2.5">
-                {data.recent_news.slice(0,5).map(n=>(
-                  <div key={n.id} className="text-xs">
-                    <div className="flex items-start gap-1.5">
-                      {n.category && (
-                        <span className={`badge mt-0.5 shrink-0 ${CAT_COLOR[n.category]??'bg-stone-700 text-stone-400'}`}>{CAT_ZH[n.category]??n.category}</span>
-                      )}
-                      <div>
-                        {n.url
-                          ? <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-orange-300 line-clamp-2 transition-colors">{n.title}</a>
-                          : <p className="text-stone-300 line-clamp-2">{n.title}</p>
-                        }
-                        <p className="text-stone-600 mt-0.5">{n.source}</p>
-                      </div>
+                {data.recent_news.slice(0,5).map(n => (
+                  <div key={n.id} className="flex items-start gap-1.5 text-xs">
+                    {n.category && (
+                      <span className={`badge mt-0.5 shrink-0 ${CAT_COLOR[n.category]??'bg-stone-700 text-stone-400'}`}>{CAT_ZH[n.category]??n.category}</span>
+                    )}
+                    <div>
+                      {n.url
+                        ? <a href={n.url} target="_blank" rel="noopener noreferrer" className="text-stone-300 hover:text-orange-300 line-clamp-2">{n.title}</a>
+                        : <p className="text-stone-300 line-clamp-2">{n.title}</p>
+                      }
+                      <p className="text-stone-600 mt-0.5">{n.source}</p>
                     </div>
                   </div>
                 ))}
@@ -487,7 +598,7 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
                 <Building2 className="w-3 h-3"/>关联企业
               </div>
               <div className="space-y-2">
-                {data.companies.slice(0,4).map(co=>{
+                {data.companies.slice(0,4).map(co => {
                   const pct = co.latest_snapshot?.price_change_pct
                   return (
                     <div key={co.id} className="flex items-center gap-2">
@@ -495,7 +606,7 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
                         <div className="text-xs text-stone-200 truncate">{co.name_zh??co.name}</div>
                         <div className="text-xs text-stone-600">{co.ticker} · {co.exchange}</div>
                       </div>
-                      {pct!=null && (
+                      {pct != null && (
                         <span className={`text-xs font-semibold ${pct>=0?'text-emerald-400':'text-red-400'}`}>
                           {pct>=0?'+':''}{pct.toFixed(1)}%
                         </span>
@@ -510,12 +621,10 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
           {/* Relationship graph */}
           {data.related_countries.length > 0 && (
             <section className="px-4 py-3">
-              <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">
-                关联关系图（产业依赖 / 贸易关系）
-              </div>
+              <div className="text-xs font-semibold text-stone-500 uppercase tracking-widest mb-2">关联关系图</div>
               <RelationGraph center={country} related={data.related_countries}/>
               <div className="mt-2 space-y-1">
-                {data.related_countries.slice(0,4).map(r=>(
+                {data.related_countries.slice(0,4).map(r => (
                   <div key={r.country} className="flex items-center gap-2 text-xs">
                     <ChevronRight className="w-3 h-3 text-stone-600"/>
                     <span className="text-stone-300 w-20 shrink-0">{r.country}</span>
@@ -531,45 +640,58 @@ function CountryPanel({ country, onClose }:{ country:string; alertLevel:string; 
   )
 }
 
-// ── Main Home component ────────────────────────────────────────────────────────
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    ()=>new Set(['influence','alert','risk','trade'] as LayerId[])
+    () => new Set(['influence','alert','risk','trade'] as LayerId[])
   )
-  const [selectedMinerals, setSelectedMinerals] = useState<Set<number>>(()=>new Set())
+  const [selectedMinerals, setSelectedMinerals] = useState<Set<number>>(() => new Set())
   const [selectedCountry, setSelectedCountry] = useState<string|null>(null)
   const [selectedAlert, setSelectedAlert]   = useState<string>('none')
   const [continent, setContinent]           = useState(CONTINENTS[0])
 
   const { data: producers=[] } = useQuery({
-    queryKey:['map'], queryFn:api.getProducerMap, refetchInterval:5*60_000,
+    queryKey: ['map'], queryFn: api.getProducerMap, refetchInterval: 5*60_000,
   })
   const { data: ticker=[] } = useQuery({
-    queryKey:['map-ticker'], queryFn:api.getMapTicker, refetchInterval:60_000,
+    queryKey: ['map-ticker'], queryFn: api.getMapTicker, refetchInterval: 60_000,
   })
   const { data: minerals=[] } = useQuery({
-    queryKey:['minerals'], queryFn:()=>api.getMinerals(),
+    queryKey: ['minerals'], queryFn: () => api.getMinerals(),
   })
 
-  const toggleLayer = useCallback((l:LayerId)=>{
-    setActiveLayers(prev=>{ const s=new Set(prev); s.has(l)?s.delete(l):s.add(l); return s })
-  },[])
-  const toggleMineral = useCallback((id:number)=>{
-    setSelectedMinerals(prev=>{ const s=new Set(prev); s.has(id)?s.delete(id):s.add(id); return s })
-  },[])
+  // Assign each selected mineral a stable unique color
+  const mineralColorMap = useMemo(() => {
+    const map = new Map<number, string>()
+    Array.from(selectedMinerals).forEach((id, i) => {
+      map.set(id, MINERAL_PALETTE[i % MINERAL_PALETTE.length])
+    })
+    return map
+  }, [selectedMinerals])
 
-  const handleClick = (p:ProducerCountry)=>{
-    setSelectedCountry(p.country); setSelectedAlert(p.alert_level??'none')
-  }
+  const toggleLayer = useCallback((l: LayerId) => {
+    setActiveLayers(prev => { const s = new Set(prev); s.has(l) ? s.delete(l) : s.add(l); return s })
+  }, [])
+  const toggleMineral = useCallback((id: number) => {
+    setSelectedMinerals(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  }, [])
 
-  // Build visible markers for each layer
-  const influenceMarkers = activeLayers.has('influence') ? producers : []
-  const alertMarkers  = activeLayers.has('alert') ? producers.filter(p=>p.alert_level==='critical'||p.alert_level==='high') : []
-  const riskMarkers   = activeLayers.has('risk')  ? producers.filter(p=>p.alert_level==='medium') : []
-  const mineralMarkers = activeLayers.has('mineral') && selectedMinerals.size>0
-    ? producers.filter(p=>p.minerals.some(m=>selectedMinerals.has(m.id))) : []
-  const showTrade = activeLayers.has('trade')
+  const handleClick = useCallback((p: ProducerCountry) => {
+    setSelectedCountry(p.country)
+    setSelectedAlert(p.alert_level ?? 'none')
+  }, [])
+
+  const showInfluence = activeLayers.has('influence')
+  const showAlert     = activeLayers.has('alert')
+  const showRisk      = activeLayers.has('risk')
+  const showTrade     = activeLayers.has('trade')
+  const showMineral   = activeLayers.has('mineral') && selectedMinerals.size > 0
+
+  const alertMarkers   = producers.filter(p => p.alert_level === 'critical' || p.alert_level === 'high')
+  const riskMarkers    = producers.filter(p => p.alert_level === 'medium')
+  const mineralMarkers = producers.filter(p => p.minerals.some(m => selectedMinerals.has(m.id)))
+  const showChoropleth = showAlert || showRisk
 
   return (
     <div className="-mx-6 -mt-6 -mb-6 flex flex-col overflow-hidden" style={{height:'calc(100vh - 56px)'}}>
@@ -578,17 +700,18 @@ export default function Home() {
       <div className="flex flex-1 overflow-hidden">
         <LayerPanel
           active={activeLayers} onToggle={toggleLayer}
-          minerals={minerals.map(m=>({id:m.id,name:m.name,name_zh:m.name_zh,symbol:m.symbol}))}
+          minerals={minerals.map(m => ({ id:m.id, name:m.name, name_zh:m.name_zh, symbol:m.symbol }))}
           selectedMinerals={selectedMinerals} onToggleMineral={toggleMineral}
+          mineralColorMap={mineralColorMap}
         />
 
         {/* Map */}
         <div className="flex-1 relative overflow-hidden">
           {/* Continent switcher */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex gap-1 bg-stone-900/90 backdrop-blur border border-stone-700 rounded-xl p-1">
-            <span className="text-xs text-stone-500 px-2 flex items-center">视图范围：</span>
-            {CONTINENTS.map(c=>(
-              <button key={c.label} onClick={()=>setContinent(c)}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-1 bg-stone-900/90 backdrop-blur border border-stone-700 rounded-xl p-1">
+            <span className="text-xs text-stone-500 px-2">视图范围：</span>
+            {CONTINENTS.map(c => (
+              <button key={c.label} onClick={() => setContinent(c)}
                 className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${continent.label===c.label?'bg-orange-600 text-white':'text-stone-400 hover:text-white hover:bg-stone-700'}`}>
                 {c.label}
               </button>
@@ -606,43 +729,51 @@ export default function Home() {
               attribution='&copy; OpenStreetMap contributors &copy; CARTO'
             />
 
-            {/* Trade flow curved lines */}
-            {showTrade && TRADE_FLOWS.map((f,i)=>(
-              <Polyline key={i} positions={bezierPath(f.from as [number,number], f.to as [number,number])}
-                pathOptions={{color:f.color, weight:f.volume*0.7, opacity:0.65, dashArray:'7 4'}}>
-                <Popup>
-                  <div style={{fontFamily:'sans-serif',fontSize:12}}>
-                    <div style={{fontWeight:700,marginBottom:3}}>{f.label}</div>
-                    <div style={{color:'#78716c'}}>矿产：{f.mineral}</div>
-                    <div style={{color:'#78716c'}}>流量：{'●'.repeat(f.volume)+'○'.repeat(4-f.volume)}</div>
-                  </div>
-                </Popup>
-              </Polyline>
-            ))}
+            {/* ① Choropleth: alert/risk country fills */}
+            <RiskChoropleth producers={producers} visible={showChoropleth}/>
 
-            {/* Destination arrows for trade flows */}
-            {showTrade && TRADE_FLOWS.map((f,i)=>(
-              <CircleMarker key={`arrow-${i}`}
-                center={f.to as [number,number]} radius={3}
-                pathOptions={{color:f.color,fillColor:f.color,fillOpacity:0.9,weight:0}}>
-              </CircleMarker>
-            ))}
+            {/* ② Trade flow bezier lines + arrowheads */}
+            {showTrade && TRADE_FLOWS.map((f, i) => {
+              const path = bezierPath(f.from, f.to)
+              const arrow = arrowhead(path)
+              return (
+                <div key={i}>
+                  <Polyline
+                    positions={path}
+                    pathOptions={{ color:f.color, weight:f.volume*0.7, opacity:0.65, dashArray:'7 4' }}
+                  >
+                    <Popup>
+                      <div style={{fontFamily:'sans-serif',fontSize:12}}>
+                        <div style={{fontWeight:700,marginBottom:3}}>{f.label}</div>
+                        <div style={{color:'#78716c'}}>矿产：{f.mineral}</div>
+                        <div style={{color:'#78716c'}}>贸易量：{'●'.repeat(f.volume)+'○'.repeat(4-f.volume)}</div>
+                      </div>
+                    </Popup>
+                  </Polyline>
+                  <Polygon
+                    positions={arrow}
+                    pathOptions={{ color:f.color, fillColor:f.color, fillOpacity:0.85, weight:0 }}
+                  />
+                </div>
+              )
+            })}
 
-            {/* Influence circles */}
-            {influenceMarkers.map(p=>{
-              const s=p.influence_score??0
-              const radius=5+Math.sqrt(s)*2.2
-              const opacity=0.3+(s/100)*0.6
-              const sel=selectedCountry===p.country
+            {/* ③ Influence circles */}
+            {showInfluence && producers.map(p => {
+              const s = p.influence_score ?? 0
+              const radius = 5 + Math.sqrt(s)*2.2
+              const opacity = 0.3 + (s/100)*0.6
+              const sel = selectedCountry === p.country
               return (
                 <CircleMarker key={`inf-${p.country}`} center={[p.lat,p.lng]}
                   radius={radius+(sel?4:0)}
-                  pathOptions={{color:sel?'#fff':'#f97316',fillColor:'#f97316',fillOpacity:opacity,weight:sel?2:1}}
-                  eventHandlers={{click:()=>handleClick(p)}}>
+                  pathOptions={{ color:sel?'#fff':'#f97316', fillColor:'#f97316', fillOpacity:opacity, weight:sel?2:1 }}
+                  eventHandlers={{ click:()=>handleClick(p) }}
+                >
                   <Popup>
                     <div style={{fontFamily:'sans-serif',fontSize:12,minWidth:130}}>
                       <div style={{fontWeight:700,marginBottom:3}}>{p.country}</div>
-                      <div style={{color:'#78716c'}}>影响力指数 {s} · {p.mineral_count} 种矿产</div>
+                      <div style={{color:'#78716c'}}>影响力 {s} · {p.mineral_count} 种矿产</div>
                       <button onClick={()=>handleClick(p)} style={{color:'#f97316',fontSize:11,cursor:'pointer',background:'none',border:'none',padding:0,marginTop:4}}>查看详情 →</button>
                     </div>
                   </Popup>
@@ -650,48 +781,63 @@ export default function Home() {
               )
             })}
 
-            {/* Alert markers */}
-            {alertMarkers.map(p=>(
-              <CircleMarker key={`alert-${p.country}`} center={[p.lat,p.lng]} radius={12}
-                pathOptions={{color:ALERT_COLOR[p.alert_level??'none'],fillColor:ALERT_COLOR[p.alert_level??'none'],fillOpacity:0.55,weight:2}}
-                eventHandlers={{click:()=>handleClick(p)}}>
-                <Popup><span style={{fontSize:12,fontFamily:'sans-serif'}}>{p.country} — {p.alert_level==='critical'?'高度警报':'风险升高'}</span></Popup>
+            {/* ④ Alert markers (critical/high) */}
+            {showAlert && alertMarkers.map(p => (
+              <CircleMarker key={`alert-${p.country}`} center={[p.lat,p.lng]} radius={13}
+                pathOptions={{ color:ALERT_COLOR[p.alert_level??'none'], fillColor:ALERT_COLOR[p.alert_level??'none'], fillOpacity:0.5, weight:2 }}
+                eventHandlers={{ click:()=>handleClick(p) }}
+              >
+                <Popup><span style={{fontSize:12}}>{p.country} — {p.alert_level==='critical'?'高度警报':'风险升高'}</span></Popup>
               </CircleMarker>
             ))}
 
-            {/* Risk markers */}
-            {riskMarkers.map(p=>(
+            {/* ⑤ Risk markers (medium) — now with click handler */}
+            {showRisk && riskMarkers.map(p => (
               <CircleMarker key={`risk-${p.country}`} center={[p.lat,p.lng]} radius={9}
-                pathOptions={{color:'#d97706',fillColor:'#d97706',fillOpacity:0.45,weight:1.5}}
-                eventHandlers={{click:()=>handleClick(p)}}>
+                pathOptions={{ color:'#d97706', fillColor:'#d97706', fillOpacity:0.4, weight:1.5 }}
+                eventHandlers={{ click:()=>handleClick(p) }}
+              >
+                <Popup><span style={{fontSize:12}}>{p.country} — 风险监测</span></Popup>
               </CircleMarker>
             ))}
 
-            {/* Per-mineral markers */}
-            {mineralMarkers.map(p=>{
-              const mineral = p.minerals.find(m=>selectedMinerals.has(m.id))
-              const color = MINERAL_CAT_COLOR[mineral?.category??''] ?? '#60a5fa'
-              return (
-                <CircleMarker key={`min-${p.country}`} center={[p.lat,p.lng]} radius={10}
-                  pathOptions={{color,fillColor:color,fillOpacity:0.6,weight:1.5}}
-                  eventHandlers={{click:()=>handleClick(p)}}>
-                  <Popup>
-                    <span style={{fontSize:12,fontFamily:'sans-serif'}}>{p.country} — {mineral?.name_zh??mineral?.name}</span>
-                  </Popup>
-                </CircleMarker>
-              )
+            {/* ⑥ Per-mineral markers with unique per-mineral color */}
+            {showMineral && mineralMarkers.map(p => {
+              // collect all selected minerals for this country
+              const matched = p.minerals.filter(m => selectedMinerals.has(m.id))
+              return matched.map((m, mi) => {
+                const color = mineralColorMap.get(m.id) ?? '#60a5fa'
+                const offset = mi * 4  // slight offset for multiple minerals
+                return (
+                  <CircleMarker key={`min-${p.country}-${m.id}`}
+                    center={[p.lat + offset*0.3, p.lng + offset*0.3]}
+                    radius={10}
+                    pathOptions={{ color, fillColor:color, fillOpacity:0.65, weight:1.5 }}
+                    eventHandlers={{ click:()=>handleClick(p) }}
+                  >
+                    <Popup>
+                      <span style={{fontSize:12}}>{p.country} — {m.name_zh??m.name}</span>
+                    </Popup>
+                  </CircleMarker>
+                )
+              })
             })}
           </MapContainer>
 
           {/* Bottom status bar */}
           <div className="absolute bottom-4 left-4 z-[1000] bg-stone-900/80 backdrop-blur border border-stone-700 rounded-lg px-3 py-1.5 text-xs text-stone-500">
-            数据来源: USGS · LME · Mining.com · 彭博 · 路透社等 &nbsp;·&nbsp; 更新时间: {new Date().toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+            数据来源: USGS · LME · Mining.com · 彭博 · 路透社 &nbsp;·&nbsp;
+            更新: {new Date().toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}
           </div>
         </div>
 
         {/* Country detail panel */}
         {selectedCountry && (
-          <CountryPanel country={selectedCountry} alertLevel={selectedAlert} onClose={()=>setSelectedCountry(null)}/>
+          <CountryPanel
+            country={selectedCountry}
+            alertLevel={selectedAlert}
+            onClose={() => setSelectedCountry(null)}
+          />
         )}
       </div>
     </div>
