@@ -4,22 +4,33 @@ import { api } from '../api/client'
 import { TrendingUp, TrendingDown, Search, Info, Download } from 'lucide-react'
 
 const CATEGORIES = [
-  { value: '', label: '全部', color: 'bg-stone-700 text-stone-300' },
-  { value: 'rare_earth', label: '稀土元素', color: 'bg-violet-600/80 text-violet-200' },
-  { value: 'battery', label: '电池金属', color: 'bg-emerald-600/80 text-emerald-200' },
-  { value: 'strategic', label: '战略矿产', color: 'bg-amber-600/80 text-amber-200' },
-  { value: 'pgm', label: '铂族金属', color: 'bg-orange-600/80 text-orange-200' },
+  { value: '',               label: '全部',         color: 'bg-stone-700 text-stone-300' },
+  { value: 'energy_storage', label: '新能源储能',   color: 'bg-emerald-600/80 text-emerald-200' },
+  { value: 'semiconductor',  label: '半导体电子',   color: 'bg-cyan-600/80 text-cyan-200' },
+  { value: 'aerospace',      label: '航空航天装备', color: 'bg-sky-600/80 text-sky-200' },
+  { value: 'defense',        label: '国防核工业',   color: 'bg-red-700/80 text-red-200' },
+  { value: 'industrial',     label: '基础工业电力', color: 'bg-amber-600/80 text-amber-200' },
+  { value: 'chemical',       label: '化工现代材料', color: 'bg-purple-600/80 text-purple-200' },
+  { value: 'rare_earth',     label: '稀土',         color: 'bg-violet-600/80 text-violet-200' },
 ]
 
 const CAT_BADGE: Record<string, string> = {
-  rare_earth: 'bg-violet-500/20 text-violet-400',
-  battery:    'bg-emerald-500/20 text-emerald-400',
-  strategic:  'bg-amber-500/20 text-amber-400',
-  pgm:        'bg-orange-500/20 text-orange-400',
-  industrial: 'bg-stone-500/20 text-stone-400',
+  energy_storage: 'bg-emerald-500/20 text-emerald-400',
+  semiconductor:  'bg-cyan-500/20 text-cyan-400',
+  aerospace:      'bg-sky-500/20 text-sky-400',
+  defense:        'bg-red-500/20 text-red-400',
+  industrial:     'bg-amber-500/20 text-amber-400',
+  chemical:       'bg-purple-500/20 text-purple-400',
+  rare_earth:     'bg-violet-500/20 text-violet-400',
 }
 const CAT_ZH: Record<string, string> = {
-  rare_earth: '稀土', battery: '电池', strategic: '战略', pgm: '铂族', industrial: '工业',
+  energy_storage: '新能源储能',
+  semiconductor:  '半导体电子',
+  aerospace:      '航空航天',
+  defense:        '国防核工业',
+  industrial:     '基础工业',
+  chemical:       '化工材料',
+  rare_earth:     '稀土',
 }
 const SUBCAT_ZH: Record<string, string> = {
   LREE: '轻稀土', HREE: '重稀土', battery_metal: '电池金属', base_metal: '基础金属',

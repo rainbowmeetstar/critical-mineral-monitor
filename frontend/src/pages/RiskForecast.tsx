@@ -4,7 +4,7 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Legend,
 } from 'recharts'
-import { format, addDays, parseISO } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import {
   Search, ChevronLeft, ChevronRight, ExternalLink,
   TrendingUp, TrendingDown, Activity, BarChart2, Info, Download,
@@ -31,9 +31,14 @@ const DAYS_OPTIONS = [
   { v: 180, label: '180天' }, { v: 365, label: '1年' },
 ]
 const MINERAL_CATEGORIES = [
-  { value: '', label: '全部' }, { value: 'rare_earth', label: '稀土' },
-  { value: 'battery', label: '电池金属' }, { value: 'strategic', label: '战略矿产' },
-  { value: 'pgm', label: '铂族金属' },
+  { value: '', label: '全部' },
+  { value: 'energy_storage', label: '新能源储能' },
+  { value: 'semiconductor', label: '半导体电子' },
+  { value: 'aerospace', label: '航空航天装备' },
+  { value: 'defense', label: '国防核工业' },
+  { value: 'industrial', label: '基础工业电力' },
+  { value: 'chemical', label: '化工现代材料' },
+  { value: 'rare_earth', label: '稀土' },
 ]
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function computeArticleRisk(a: NewsArticle): RiskLevel {
@@ -587,8 +592,20 @@ function MixedModelPanel({ fc }: { fc: ForecastOut }) {
 }
 
 // ── PriceChartPanel ───────────────────────────────────────────────────────────
+// Uses real timestamps as numeric X axis for true linear time proportions.
+// Chart is divided into 5 sections: 4 equal historical quarters + 1 "今日" zone.
+type ChartPt = {
+  ts: number
+  price?: number
+  ma7?: number
+  ma30?: number
+  forecastMid?: number
+  forecastLow?: number
+  forecastBand?: number
+}
+
 function PriceChartPanel({
-  history, forecast, days, showMA7, showMA30,
+  history, forecast, showMA7, showMA30,
 }: {
   history: PriceHistory
   forecast: ForecastOut | undefined
@@ -597,101 +614,162 @@ function PriceChartPanel({
   showMA30: boolean
 }) {
   const prices = history.prices
+  const unit = history.unit ?? ''
 
-  const chartData = useMemo(() => {
+  const { chartData, quarterTs, todayTs, nowTs, histEndTs } = useMemo(() => {
+    if (!prices.length) return { chartData: [] as ChartPt[], quarterTs: [] as number[], todayTs: 0, nowTs: 0, histEndTs: 0 }
+
     const priceVals = prices.map(p => p.price)
-    const ma7s = computeMA(priceVals, 7)
+    const ma7s  = computeMA(priceVals, 7)
     const ma30s = computeMA(priceVals, 30)
 
-    const hist = prices.map((p, i) => ({
-      date: format(new Date(p.timestamp), days <= 7 ? 'MM-dd HH:mm' : 'MM-dd'),
+    const hist: ChartPt[] = prices.map((p, i) => ({
+      ts: new Date(p.timestamp).getTime(),
       price: p.price,
-      ma7: showMA7 ? ma7s[i] : undefined,
+      ma7:  showMA7  ? ma7s[i]  : undefined,
       ma30: showMA30 ? ma30s[i] : undefined,
     }))
 
-    if (!forecast?.forecast_7d_mid || !hist.length) return hist
+    const histStart = hist[0].ts
+    const histEnd   = hist.at(-1)!.ts
+    const histRange = histEnd - histStart
 
-    const lastDate = new Date(prices.at(-1)!.timestamp)
-    const lastPrice = hist.at(-1)!.price
+    // 3 quarter-point section dividers (at 25%, 50%, 75% of historical range)
+    const quarterTs = [0.25, 0.5, 0.75].map(f => histStart + histRange * f)
 
-    const fMid = forecast.forecast_7d_mid
-    const fLow = forecast.forecast_7d_low ?? fMid * 0.97
-    const fHigh = forecast.forecast_7d_high ?? fMid * 1.03
+    const now = Date.now()
+    const todayMidnight = new Date()
+    todayMidnight.setHours(0, 0, 0, 0)
+    const todayTs = todayMidnight.getTime()
 
-    const forecastPts = Array.from({ length: 7 }, (_, i) => {
-      const t = (i + 1) / 7
-      const mid = lastPrice + (fMid - lastPrice) * t
-      const low = lastPrice + (fLow - lastPrice) * t
-      const high = lastPrice + (fHigh - lastPrice) * t
-      return {
-        date: format(addDays(lastDate, i + 1), 'MM-dd'),
-        forecastMid: mid,
-        forecastLow: low,
-        forecastBand: high - low,
+    // Today's intraday section: 4 synthetic points at 0h, 6h, 12h, now
+    // Only appended if there's a meaningful gap after last historical point
+    const lastPrice = hist.at(-1)!.price!
+    const intraday: ChartPt[] = [
+      { ts: todayTs,                      price: lastPrice },
+      { ts: todayTs + 6  * 3_600_000,    price: lastPrice },
+      { ts: todayTs + 12 * 3_600_000,    price: lastPrice },
+      { ts: now,                          price: lastPrice },
+    ].filter(p => p.ts > histEnd + 3_600_000)
+
+    // 7-day forecast: interpolated band from last known price
+    const fcPts: ChartPt[] = []
+    if (forecast?.forecast_7d_mid) {
+      const fMid  = forecast.forecast_7d_mid
+      const fLow  = forecast.forecast_7d_low  ?? fMid * 0.97
+      const fHigh = forecast.forecast_7d_high ?? fMid * 1.03
+      const startTs    = intraday.at(-1)?.ts ?? histEnd
+      const startPrice = lastPrice
+
+      fcPts.push({ ts: startTs, forecastMid: startPrice, forecastLow: startPrice, forecastBand: 0 })
+      for (let i = 1; i <= 7; i++) {
+        const t   = i / 7
+        const mid = startPrice + (fMid  - startPrice) * t
+        const lo  = startPrice + (fLow  - startPrice) * t
+        const hi  = startPrice + (fHigh - startPrice) * t
+        fcPts.push({ ts: startTs + i * 86_400_000, forecastMid: mid, forecastLow: lo, forecastBand: hi - lo })
       }
-    })
-
-    const bridge = {
-      date: hist.at(-1)!.date,
-      price: lastPrice,
-      forecastMid: lastPrice,
-      forecastLow: lastPrice,
-      forecastBand: 0,
     }
 
-    return [...hist.slice(0, -1), bridge, ...forecastPts]
-  }, [prices, forecast, days, showMA7, showMA30])
+    return {
+      chartData: [...hist, ...intraday, ...fcPts],
+      quarterTs,
+      todayTs,
+      nowTs: now,
+      histEndTs: histEnd,
+    }
+  }, [prices, forecast, showMA7, showMA30])
 
-  const allPrices = prices.map(p => p.price)
-  const fLow = forecast?.forecast_7d_low
-  const fHigh = forecast?.forecast_7d_high
-  const yMin = Math.min(...allPrices, fLow ?? Infinity) * 0.98
-  const yMax = Math.max(...allPrices, fHigh ?? -Infinity) * 1.02
+  // Custom X-axis ticks: quarter marks + intraday markers + forecast end
+  const xTicks = useMemo(() => {
+    if (!chartData.length) return []
+    const firstTs = chartData[0].ts
+    const histRange = histEndTs - firstTs
+    const histTicks = [0, 0.25, 0.5, 0.75, 1].map(f => firstTs + histRange * f)
+    const intradayTicks = [6, 12].map(h => todayTs + h * 3_600_000).filter(t => t > histEndTs && t < nowTs)
+    const fcEnd = nowTs + 7 * 86_400_000
+    return [...histTicks, ...intradayTicks, nowTs > histEndTs ? nowTs : null, fcEnd]
+      .filter((v): v is number => v !== null && v > 0)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .sort((a, b) => a - b)
+  }, [chartData, histEndTs, todayTs, nowTs])
 
-  const dividerDate = chartData.find(d => ('forecastMid' in d) && ('price' in d))?.date
+  const fmtTick = (ts: number) => {
+    if (ts >= todayTs) return format(new Date(ts), 'HH:mm')
+    return format(new Date(ts), 'MM-dd')
+  }
 
+  const allPrices  = prices.map(p => p.price)
+  const yMin = Math.min(...allPrices, forecast?.forecast_7d_low  ?? Infinity) * 0.98
+  const yMax = Math.max(...allPrices, forecast?.forecast_7d_high ?? -Infinity) * 1.02
   const fmtY = (v: number) =>
     v >= 10000 ? `${(v / 1000).toFixed(1)}k` : v >= 100 ? v.toFixed(0) : v.toFixed(2)
 
-  const unit = history.unit ?? ''
-
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-3 mb-2">
         <span className="text-xs text-stone-500">
-          纵轴: 商品绝对价格（{unit}）· 横轴: 日期
+          纵轴: 商品绝对价格（{unit}）· 横轴: 线性时间轴，5等分（前4格历史 · 第5格今日实时/预测）
         </span>
-        <span className="text-[10px] text-stone-600 ml-2">
-          与股市区别: 股票常用涨跌幅%对比，商品使用绝对价格反映实际采购成本
+        <span className="text-[10px] text-stone-600">
+          区别于股市涨跌幅%，商品价格采用绝对值，直接反映采购成本
         </span>
       </div>
 
       <ResponsiveContainer width="100%" height={340}>
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 4 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 20, left: 0, bottom: 4 }}>
           <defs>
             <linearGradient id="fcBand" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#34d399" stopOpacity={0.18} />
-              <stop offset="95%" stopColor="#34d399" stopOpacity={0.04} />
+              <stop offset="5%"  stopColor="#34d399" stopOpacity={0.20} />
+              <stop offset="95%" stopColor="#34d399" stopOpacity={0.03} />
+            </linearGradient>
+            <linearGradient id="todayZone" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"  stopColor="#1e293b" stopOpacity={0.5} />
+              <stop offset="100%" stopColor="#1e293b" stopOpacity={0.1} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#292524" />
 
-          {/* Forecast zone background */}
-          {dividerDate && (
+          <CartesianGrid strokeDasharray="3 3" stroke="#1c1917" vertical={false} />
+
+          {/* Section dividers at each quarter of historical period */}
+          {quarterTs.map((ts, i) => (
             <ReferenceLine
-              x={dividerDate}
-              stroke="#44403c"
+              key={i}
+              x={ts}
+              stroke="#292524"
               strokeDasharray="4 3"
-              label={{ value: '历史数据 | 预测区间', position: 'insideTopLeft', fill: '#78716c', fontSize: 10 }}
+            />
+          ))}
+
+          {/* Today zone boundary */}
+          {histEndTs > 0 && todayTs > histEndTs && (
+            <ReferenceLine
+              x={todayTs}
+              stroke="#44403c"
+              strokeDasharray="5 3"
+              label={{ value: '今日区间 ▶', position: 'insideTopLeft', fill: '#78716c', fontSize: 9 }}
+            />
+          )}
+
+          {/* Forecast boundary at current time */}
+          {nowTs > histEndTs && (
+            <ReferenceLine
+              x={nowTs}
+              stroke="#166534"
+              strokeDasharray="4 2"
+              label={{ value: '预测区间 ↗', position: 'insideTopRight', fill: '#34d399', fontSize: 9 }}
             />
           )}
 
           <XAxis
-            dataKey="date"
+            dataKey="ts"
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+            ticks={xTicks}
+            tickFormatter={fmtTick}
             tick={{ fill: '#78716c', fontSize: 10 }}
             tickLine={false}
-            interval="preserveStartEnd"
           />
           <YAxis
             domain={[yMin, yMax]}
@@ -704,12 +782,11 @@ function PriceChartPanel({
           <Tooltip
             contentStyle={{ backgroundColor: '#0c0a09', border: '1px solid #292524', borderRadius: 8, color: '#e7e5e4', fontSize: 12 }}
             labelStyle={{ color: '#a8a29e' }}
+            labelFormatter={(ts: number) => format(new Date(ts), ts >= todayTs ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd')}
             formatter={(val: number, name: string) => {
-              if (name === 'forecastBand') return null
-              if (name === 'forecastLow') return null
+              if (name === 'forecastBand' || name === 'forecastLow') return null
               const labels: Record<string, string> = {
-                price: `实时价格`, forecastMid: '预测中值',
-                ma7: 'MA7', ma30: 'MA30',
+                price: '实时价格', forecastMid: '预测中值', ma7: 'MA7', ma30: 'MA30',
               }
               return [`${val.toFixed(2)} ${unit}`, labels[name] ?? name]
             }}
@@ -718,7 +795,7 @@ function PriceChartPanel({
             wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
             formatter={(v: string) => {
               const m: Record<string, string | null> = {
-                price: '历史价格', forecastMid: '预测中值',
+                price: '历史价格', forecastMid: '预测中值（7日）',
                 ma7: '均线 MA7', ma30: '均线 MA30',
                 forecastLow: null, forecastBand: null,
               }
@@ -726,14 +803,14 @@ function PriceChartPanel({
             }}
           />
 
-          {/* Forecast confidence band */}
-          <Area dataKey="forecastLow" stackId="fc" fill="transparent" stroke="transparent" legendType="none" />
-          <Area dataKey="forecastBand" stackId="fc" fill="url(#fcBand)" stroke="transparent" legendType="none" />
+          {/* Forecast confidence band (stacked area) */}
+          <Area dataKey="forecastLow"  stackId="fc" fill="transparent"     stroke="transparent" legendType="none" />
+          <Area dataKey="forecastBand" stackId="fc" fill="url(#fcBand)"    stroke="transparent" legendType="none" />
 
-          {/* MAs */}
+          {/* MA lines */}
           {showMA7 && (
-            <Line dataKey="ma7" stroke="#60a5fa" strokeWidth={1} dot={false}
-              strokeDasharray="3 2" connectNulls name="ma7" legendType="line" />
+            <Line dataKey="ma7"  stroke="#60a5fa" strokeWidth={1} dot={false}
+              strokeDasharray="3 2" connectNulls name="ma7"  legendType="line" />
           )}
           {showMA30 && (
             <Line dataKey="ma30" stroke="#a78bfa" strokeWidth={1} dot={false}
@@ -744,7 +821,7 @@ function PriceChartPanel({
           <Line dataKey="forecastMid" stroke="#34d399" strokeWidth={1.5}
             strokeDasharray="5 3" dot={false} connectNulls name="forecastMid" legendType="line" />
 
-          {/* Historical price */}
+          {/* Historical + today price */}
           <Line dataKey="price" stroke="#f97316" strokeWidth={2} dot={false}
             activeDot={{ r: 4, fill: '#f97316' }} name="price" legendType="line" />
         </ComposedChart>
