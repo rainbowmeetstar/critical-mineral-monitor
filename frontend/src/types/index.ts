@@ -127,26 +127,25 @@ export interface CountryDetail {
   country: string
   minerals: CountryMineralItem[]
   influence_score: number
+  risk: {
+    supply: number
+    price: number
+    geopolitical: number
+    industry: number
+    environmental: number
+    risk_score: number
+    risk_level: 'low' | 'medium' | 'high' | 'critical'
+  }
+  mineral_share: Array<{ name: string; value: number }>
+  mining_sites: Array<{ name: string; location: string; mineral: string; output: string }>
   recent_news: Array<{
-    id: number
-    title: string
-    url: string | null
-    source: string | null
-    category: string | null
-    published_at: string | null
-    summary: string | null
+    id: number; title: string; url: string | null; source: string | null
+    category: string | null; published_at: string | null; summary: string | null
   }>
-  related_countries: Array<{
-    country: string
-    shared_minerals: string[]
-  }>
+  related_countries: Array<{ country: string; shared_minerals: string[] }>
   companies: Array<{
-    id: number
-    name: string
-    name_zh: string | null
-    ticker: string | null
-    exchange: string | null
-    minerals_focus: string[]
+    id: number; name: string; name_zh: string | null; ticker: string | null
+    exchange: string | null; minerals_focus: string[]
     latest_snapshot: { stock_price: number | null; price_change_pct: number | null } | null
   }>
 }
