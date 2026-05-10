@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
-import { FileText, Building2, Landmark, Globe, Layers, ExternalLink } from 'lucide-react'
+import { FileText, Building2, Landmark, Globe, ExternalLink, Calendar, MapPin, RefreshCw } from 'lucide-react'
 
 type Audience = 'enterprise' | 'government'
+type Days = 7 | 30
 
 const AUDIENCE_OPTIONS = [
   {
@@ -12,7 +13,7 @@ const AUDIENCE_OPTIONS = [
     icon: Building2,
     color: 'text-blue-400',
     activeBg: 'bg-blue-600/20 border-blue-600/40',
-    desc: '价格信号 · 矿企股价 · 市场资讯 · 风险预警',
+    desc: '矿产价格 · 风险提示 · 购买建议 · 市场资讯',
   },
   {
     value: 'government' as Audience,
@@ -20,41 +21,46 @@ const AUDIENCE_OPTIONS = [
     label: '政府版',
     color: 'text-emerald-400',
     activeBg: 'bg-emerald-600/20 border-emerald-600/40',
-    desc: '供应安全 · 政策动态 · 战略矿产 · 勘探资讯',
+    desc: '政策动向 · 贸易情况 · 外交举措 · 供应安全',
   },
+]
+
+const DAYS_OPTIONS: { value: Days; label: string }[] = [
+  { value: 7,  label: '近一周' },
+  { value: 30, label: '近一月' },
 ]
 
 export default function Briefing() {
   const [audience, setAudience] = useState<Audience>('enterprise')
-  const [selectedMineralId, setSelectedMineralId] = useState<number | null>(null)
+  const [days, setDays] = useState<Days>(7)
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
 
-  const { data: minerals } = useQuery({
-    queryKey: ['minerals'],
-    queryFn: () => api.getMinerals(),
+  const { data: activeCountries, isLoading: loadingCountries, refetch } = useQuery({
+    queryKey: ['active-countries', days],
+    queryFn: () => api.getActiveCountries(days),
   })
 
-  const scope = selectedMineralId ? '单矿产简报' : '全局综合简报'
-  const briefingUrl = selectedMineralId
-    ? api.briefingMineral(selectedMineralId, audience)
-    : api.briefingGlobal(audience)
-
-  const selectedMineral = minerals?.find(m => m.id === selectedMineralId)
   const aud = AUDIENCE_OPTIONS.find(a => a.value === audience)!
 
+  const briefingUrl = api.briefingCountry(audience, days, selectedCountry || undefined)
+
+  const contentItems = audience === 'enterprise'
+    ? ['各国相关矿产价格行情', '价格趋势与展望信号', '风险提示与预警', '购买建议参考', '市场资讯摘要']
+    : ['政策动向与立法举措', '贸易限制与外交情况', '供应安全评估', '勘探开发动态', '战略矿产风险']
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Title */}
+    <div className="max-w-2xl mx-auto space-y-5">
       <div className="flex items-center gap-3">
         <FileText className="w-6 h-6 text-orange-400" />
         <div>
           <h1 className="text-lg font-bold text-white">分析简报生成</h1>
           <p className="text-xs text-stone-500 mt-0.5">
-            面向企业或政府决策层，生成结构化矿产市场分析报告，可直接打印为 PDF
+            按国家汇总近期关键矿产动态，生成政府或企业决策简报，可打印为 PDF
           </p>
         </div>
       </div>
 
-      {/* Step 1: Audience */}
+      {/* Audience */}
       <div className="card space-y-3">
         <div className="text-xs font-semibold text-stone-400 uppercase tracking-widest">
           Step 1 &nbsp;·&nbsp; 选择受众类型
@@ -89,67 +95,95 @@ export default function Briefing() {
         </div>
       </div>
 
-      {/* Step 2: Scope */}
+      {/* Time range */}
       <div className="card space-y-3">
         <div className="text-xs font-semibold text-stone-400 uppercase tracking-widest">
-          Step 2 &nbsp;·&nbsp; 选择简报范围
+          Step 2 &nbsp;·&nbsp; 选择时间范围
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="flex gap-2">
+          {DAYS_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => { setDays(opt.value); setSelectedCountry('') }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm transition-all ${
+                days === opt.value
+                  ? 'bg-orange-600/20 border-orange-600/40 text-orange-300 font-medium'
+                  : 'border-stone-700 text-stone-400 hover:border-stone-600 hover:text-white'
+              }`}
+            >
+              <Calendar className="w-4 h-4" />
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Country selection */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold text-stone-400 uppercase tracking-widest">
+            Step 3 &nbsp;·&nbsp; 选择国家（可选）
+          </div>
           <button
-            onClick={() => setSelectedMineralId(null)}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              selectedMineralId === null
-                ? 'bg-orange-600/20 border-orange-600/40'
-                : 'border-stone-700 hover:border-stone-600'
-            }`}
+            onClick={() => refetch()}
+            className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-300"
           >
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-orange-400" />
-              <span className="text-sm font-medium text-white">全局综合简报</span>
-            </div>
-            <p className="text-xs text-stone-500 mt-1">覆盖所有追踪矿产，总览市场全局</p>
-          </button>
-          <button
-            onClick={() => setSelectedMineralId(selectedMineralId ?? (minerals?.[0]?.id ?? null))}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              selectedMineralId !== null
-                ? 'bg-orange-600/20 border-orange-600/40'
-                : 'border-stone-700 hover:border-stone-600'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-medium text-white">单矿产深度简报</span>
-            </div>
-            <p className="text-xs text-stone-500 mt-1">聚焦某一矿产的深度分析</p>
+            <RefreshCw className="w-3 h-3" />刷新
           </button>
         </div>
 
-        {/* Mineral selector */}
-        {selectedMineralId !== null && (
-          <div className="space-y-1.5">
-            <div className="text-xs text-stone-500">选择矿产：</div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-52 overflow-y-auto pr-1">
-              {minerals?.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setSelectedMineralId(m.id)}
-                  className={`px-3 py-2 rounded-lg text-xs text-left transition-colors border ${
-                    selectedMineralId === m.id
-                      ? 'bg-orange-600/20 border-orange-600/40 text-white'
-                      : 'border-stone-700 text-stone-400 hover:text-white hover:border-stone-600'
-                  }`}
-                >
-                  <div className="font-medium">{m.name_zh ?? m.name}</div>
-                  <div className="text-stone-500 mt-0.5">{m.symbol ?? m.category}</div>
-                </button>
-              ))}
-            </div>
+        <button
+          onClick={() => setSelectedCountry('')}
+          className={`w-full p-3 rounded-xl border text-left transition-all ${
+            selectedCountry === ''
+              ? 'bg-orange-600/20 border-orange-600/40'
+              : 'border-stone-700 hover:border-stone-600'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-orange-400" />
+            <span className="text-sm font-medium text-white">全部活跃国家</span>
+            {activeCountries && (
+              <span className="ml-auto text-xs text-stone-500">
+                {activeCountries.length} 个国家有{DAYS_OPTIONS.find(d => d.value === days)?.label}动态
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-stone-500 mt-1 ml-6">汇总所有有动态的国家，生成综合报告</p>
+        </button>
+
+        {loadingCountries ? (
+          <div className="text-xs text-stone-500 text-center py-4">加载活跃国家...</div>
+        ) : activeCountries && activeCountries.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {activeCountries.map(({ country, count }) => (
+              <button
+                key={country}
+                onClick={() => setSelectedCountry(country)}
+                className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                  selectedCountry === country
+                    ? 'bg-orange-600/20 border-orange-600/40'
+                    : 'border-stone-700 hover:border-stone-600'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <MapPin className={`w-3 h-3 ${selectedCountry === country ? 'text-orange-400' : 'text-stone-600'}`} />
+                  <span className={`text-sm font-medium ${selectedCountry === country ? 'text-white' : 'text-stone-400'}`}>
+                    {country}
+                  </span>
+                  <span className="ml-auto text-[10px] text-stone-600">{count}条</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-stone-600 text-center py-3">
+            暂无{DAYS_OPTIONS.find(d => d.value === days)?.label}活跃国家数据
           </div>
         )}
       </div>
 
-      {/* Preview card */}
+      {/* Preview */}
       <div className="card bg-stone-800/40 border-dashed border-stone-700">
         <div className="text-xs text-stone-500 mb-3 uppercase tracking-widest font-semibold">简报预览</div>
         <div className="space-y-2 text-sm">
@@ -158,14 +192,14 @@ export default function Briefing() {
             <span className={`font-medium ${aud.color}`}>{aud.label}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-stone-400">覆盖范围</span>
-            <span className="text-white font-medium">
-              {selectedMineralId ? (selectedMineral?.name_zh ?? selectedMineral?.name ?? '—') : '全部矿产'}
-            </span>
+            <span className="text-stone-400">时间范围</span>
+            <span className="text-white font-medium">{DAYS_OPTIONS.find(d => d.value === days)?.label}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-stone-400">简报类型</span>
-            <span className="text-white">{scope}</span>
+            <span className="text-stone-400">覆盖范围</span>
+            <span className="text-white font-medium">
+              {selectedCountry || `全部活跃国家（${activeCountries?.length ?? '—'}个）`}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-stone-400">输出格式</span>
@@ -176,14 +210,7 @@ export default function Briefing() {
         <div className="mt-4 pt-4 border-t border-stone-700">
           <div className="text-xs text-stone-500 mb-3">简报包含内容：</div>
           <div className="grid grid-cols-2 gap-1.5">
-            {audience === 'enterprise' ? [
-              '价格行情总览', '矿企股价动态', '市场资讯摘要', '价格展望信号',
-              '风险提示', '数据来源说明',
-            ] : [
-              '战略矿产供应安全评估', '价格行情总览（含关键度）',
-              '政策与监管动态', '勘探与开发资讯',
-              '风险提示', '数据来源说明',
-            ].map(item => (
+            {contentItems.map(item => (
               <div key={item} className="flex items-center gap-1.5 text-xs text-stone-400">
                 <span className="text-emerald-500">✓</span>{item}
               </div>

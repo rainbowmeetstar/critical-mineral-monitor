@@ -83,4 +83,11 @@ export const api = {
     `${BASE}/briefing/global?audience=${audience}`,
   briefingMineral: (mineralId: number, audience: 'enterprise' | 'government') =>
     `${BASE}/briefing/mineral/${mineralId}?audience=${audience}`,
+  briefingCountry: (audience: 'enterprise' | 'government', days: 7 | 30, country?: string) => {
+    const p = new URLSearchParams({ audience, days: String(days) })
+    if (country) p.set('country', country)
+    return `${BASE}/briefing/country?${p}`
+  },
+  getActiveCountries: (days: 7 | 30) =>
+    get<{ country: string; count: number }[]>(`/briefing/active-countries`, { days }),
 }

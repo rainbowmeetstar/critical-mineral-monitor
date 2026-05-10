@@ -475,6 +475,248 @@ async def global_briefing(
     return HTMLResponse(content=html)
 
 
+@router.get("/active-countries")
+async def active_countries(
+    days: int = Query(default=7, ge=1, le=30),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return countries with recent news activity, sorted by article count."""
+    from collections import Counter
+    since = datetime.utcnow() - timedelta(days=days)
+    articles = (await db.execute(
+        select(NewsArticle)
+        .where(NewsArticle.published_at >= since, NewsArticle.country.isnot(None))
+    )).scalars().all()
+
+    counts: Counter = Counter()
+    for a in articles:
+        c = (a.country or "").strip()
+        if c:
+            counts[c] += 1
+
+    return [{"country": k, "count": v} for k, v in counts.most_common(20)]
+
+
+def _build_country_gov_section(country: str, articles: list, mineral_data: list) -> str:
+    """Government view: policy trends, trade, diplomatic moves."""
+    policy_news = [a for a in articles if a.category in ("policy", "exploration", "industry")]
+    other_news  = [a for a in articles if a not in policy_news]
+
+    minerals_str = ", ".join(set(
+        mn for a in articles for mn in (a.minerals_mentioned or [])
+    ))[:120] or "—"
+
+    items = []
+    # Policy section
+    if policy_news:
+        items.append('<div style="margin-bottom:10px">')
+        items.append('<div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px">📜 政策动向与举措</div>')
+        for a in policy_news[:5]:
+            date = a.published_at.strftime("%m-%d") if a.published_at else ""
+            cat_html = _cat_badge(a.category or "policy")
+            title = a.title[:100] + ("…" if len(a.title) > 100 else "")
+            summary = (a.summary or "")[:150] + ("…" if a.summary and len(a.summary) > 150 else "")
+            items.append(f'''<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:5px">
+              <div style="font-size:12px;font-weight:500;color:#0f172a">{title}</div>
+              {"<div style='font-size:11px;color:#475569;margin-top:3px'>" + summary + "</div>" if summary else ""}
+              <div style="font-size:10px;color:#94a3b8;margin-top:4px">{cat_html} {date}</div>
+            </div>''')
+        items.append('</div>')
+
+    # Trade / other news
+    if other_news:
+        items.append('<div style="margin-bottom:10px">')
+        items.append('<div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px">🤝 贸易与外交动态</div>')
+        for a in other_news[:3]:
+            date = a.published_at.strftime("%m-%d") if a.published_at else ""
+            title = a.title[:100] + ("…" if len(a.title) > 100 else "")
+            items.append(f'''<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:5px">
+              <div style="font-size:12px;font-weight:500;color:#0f172a">{title}</div>
+              <div style="font-size:10px;color:#94a3b8;margin-top:3px">{date}</div>
+            </div>''')
+        items.append('</div>')
+
+    # Involved minerals note
+    if minerals_str != "—":
+        items.append(f'<div style="font-size:11px;color:#475569;background:#f1f5f9;padding:8px 12px;border-radius:6px">⛏ 涉及矿产：{minerals_str}</div>')
+
+    return "".join(items)
+
+
+def _build_country_ent_section(country: str, articles: list, mineral_data: list) -> str:
+    """Enterprise view: prices, risk alerts, purchase recommendations."""
+    involved_minerals = set(mn for a in articles for mn in (a.minerals_mentioned or []))
+    relevant_mdata = [d for d in mineral_data if (d["mineral"].name in involved_minerals or (d["mineral"].name_zh and d["mineral"].name_zh in involved_minerals))]
+
+    items = []
+
+    # Price table for relevant minerals
+    if relevant_mdata:
+        rows = ""
+        for d in relevant_mdata[:8]:
+            if d["latest"] is None:
+                continue
+            m = d["mineral"]
+            name = m.name_zh or m.name
+            outlook = _ob_badge(d["outlook"])
+            mom7_html = _pct(d["mom7"])
+            mom30_html = _pct(d["mom30"])
+            risk_flag = "⚠ 波动显著" if d["mom30"] and abs(d["mom30"]) > 15 else ""
+            advice = ""
+            if d["outlook"] in ("看涨",):
+                advice = '<span style="color:#16a34a;font-weight:600">建议提前锁价</span>'
+            elif d["outlook"] in ("看跌",):
+                advice = '<span style="color:#64748b">可等待低位建仓</span>'
+            else:
+                advice = '<span style="color:#64748b">维持正常采购节奏</span>'
+            rows += f"""<tr>
+              <td><strong>{name}</strong> {f'<span style="font-size:10px;color:#dc2626">{risk_flag}</span>' if risk_flag else ''}</td>
+              <td>{d['latest']:.3f} <span style="font-size:10px;color:#94a3b8">{d['unit'] or ''}</span></td>
+              <td>{mom7_html}</td><td>{mom30_html}</td>
+              <td>{outlook}</td>
+              <td>{advice}</td>
+            </tr>"""
+        if rows:
+            items.append(f"""<div style="margin-bottom:10px">
+              <div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px">💹 相关矿产价格与购买建议</div>
+              <table><thead><tr><th>矿产</th><th>当前价格</th><th>7日</th><th>30日</th><th>展望</th><th>建议</th></tr></thead>
+              <tbody>{rows}</tbody></table></div>""")
+
+    # Risk news: policy category or articles with risk keywords in title
+    risk_news = [a for a in articles if a.category == "policy" or any(
+        kw in (a.title or "") for kw in ("制裁", "禁止", "限制", "冲突", "封锁", "中断", "出口管制")
+    )]
+    if risk_news:
+        items.append('<div style="margin-bottom:10px">')
+        items.append('<div style="font-size:12px;font-weight:600;color:#c2410c;margin-bottom:6px">⚠ 风险提示</div>')
+        for a in risk_news[:4]:
+            date = a.published_at.strftime("%m-%d") if a.published_at else ""
+            title = a.title[:100] + ("…" if len(a.title) > 100 else "")
+            items.append(f'''<div class="risk-box" style="margin-bottom:5px">
+              <div style="font-size:12px;color:#92400e">{title}</div>
+              <div style="font-size:10px;color:#b45309;margin-top:3px">{date}</div>
+            </div>''')
+        items.append('</div>')
+
+    # General news
+    other = [a for a in articles if a not in risk_news]
+    if other:
+        items.append('<div>')
+        items.append('<div style="font-size:12px;font-weight:600;color:#0f172a;margin-bottom:6px">📰 市场资讯</div>')
+        for a in other[:4]:
+            date = a.published_at.strftime("%m-%d") if a.published_at else ""
+            title = a.title[:100] + ("…" if len(a.title) > 100 else "")
+            items.append(f'''<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:5px">
+              <div style="font-size:12px;color:#0f172a">{title}</div>
+              <div style="font-size:10px;color:#94a3b8;margin-top:3px">{date}</div>
+            </div>''')
+        items.append('</div>')
+
+    return "".join(items)
+
+
+@router.get("/country", response_class=HTMLResponse)
+async def country_briefing(
+    audience: str = Query(default="enterprise", regex="^(enterprise|government)$"),
+    days: int = Query(default=7, ge=1, le=30),
+    country: str = Query(default=""),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-country briefing: summarise recent activity for one or all active countries."""
+    from collections import defaultdict
+    since = datetime.utcnow() - timedelta(days=days)
+    q = select(NewsArticle).where(
+        NewsArticle.published_at >= since,
+        NewsArticle.country.isnot(None),
+    )
+    if country:
+        q = q.where(NewsArticle.country.ilike(f"%{country}%"))
+    q = q.order_by(NewsArticle.published_at.desc()).limit(300)
+    all_articles = (await db.execute(q)).scalars().all()
+
+    mineral_data = await _load_minerals_with_prices(db)
+
+    # Group articles by country
+    country_articles: dict[str, list] = defaultdict(list)
+    for a in all_articles:
+        c = (a.country or "").strip()
+        if c:
+            country_articles[c].append(a)
+
+    # If specific country filter but no country-tagged results, show all articles for that country
+    if country and not country_articles:
+        country_articles[country] = list(all_articles)
+
+    # Sort countries by article count
+    sorted_countries = sorted(country_articles.items(), key=lambda x: -len(x[1]))[:12]
+
+    now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    period = f"近{days}日"
+    aud_label = "企业版" if audience == "enterprise" else "政府版"
+    aud_cls   = "badge-ent" if audience == "enterprise" else "badge-gov"
+    scope = f"国家动态简报 · {period}"
+
+    if not sorted_countries:
+        body = '<div style="text-align:center;padding:40px;color:#94a3b8;font-size:14px">暂无符合条件的国家动态数据</div>'
+    else:
+        sections = []
+        for cname, articles in sorted_countries:
+            deduped = list({a.id: a for a in articles}.values())
+            deduped.sort(key=lambda a: a.published_at or datetime.min, reverse=True)
+
+            if audience == "government":
+                inner = _build_country_gov_section(cname, deduped, mineral_data)
+            else:
+                inner = _build_country_ent_section(cname, deduped, mineral_data)
+
+            count = len(deduped)
+            sections.append(f"""
+<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:20px;page-break-inside:avoid">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid #f1f5f9">
+    <div style="font-size:16px;font-weight:700;color:#0f172a">🌏 {cname}</div>
+    <div style="font-size:11px;color:#94a3b8">{period}动态 · {count} 条资讯</div>
+  </div>
+  {inner}
+</div>""")
+
+        body = "\n".join(sections)
+
+    stats_html = f"""<div class="stats">
+      <div class="stat-box"><div class="stat-val">{len(sorted_countries)}</div><div class="stat-lbl">活跃国家</div></div>
+      <div class="stat-box"><div class="stat-val">{len(all_articles)}</div><div class="stat-lbl">相关资讯</div></div>
+      <div class="stat-box"><div class="stat-val">{days}</div><div class="stat-lbl">统计天数</div></div>
+      <div class="stat-box"><div class="stat-val">{aud_label}</div><div class="stat-lbl">简报类型</div></div>
+    </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>关键矿产国家动态简报 — {aud_label}</title>
+<style>{_CSS}</style>
+</head><body><div class="page">
+<div class="hd">
+  <div>
+    <div class="hd-title">🔬 关键矿产监测简报</div>
+    <div class="hd-sub">{scope} &nbsp;·&nbsp; {now} &nbsp;·&nbsp; 数据来源：Yahoo Finance · Google News · USGS</div>
+  </div>
+  <div style="text-align:right">
+    <span class="badge {aud_cls}">{aud_label}</span>
+    <div class="hd-sub" style="margin-top:6px">Critical Mineral Monitor</div>
+  </div>
+</div>
+{stats_html}
+{body}
+{_footer()}
+<div class="no-print" style="margin-top:24px;text-align:center">
+  <button onclick="window.print()" style="padding:8px 20px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">
+    🖨 打印 / 导出 PDF
+  </button>
+</div>
+</div></body></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.get("/mineral/{mineral_id}", response_class=HTMLResponse)
 async def mineral_briefing(
     mineral_id: int,

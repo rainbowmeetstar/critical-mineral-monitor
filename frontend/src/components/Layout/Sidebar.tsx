@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Database, Map, Building2, FileText, Newspaper, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, Database, Map, Building2, FileText, Newspaper, TrendingUp, GitBranch } from 'lucide-react'
 
 const TOP_NAV = [
   { to: '/', label: '风险态势图', icon: LayoutDashboard },
@@ -8,6 +8,7 @@ const TOP_NAV = [
 const RISK_NAV = [
   { to: '/risk-forecast',        label: '政策新闻推送', icon: Newspaper },
   { to: '/risk-forecast/prices', label: '价格行情',     icon: TrendingUp },
+  { to: '/risk-deduction',       label: '风险推演',     icon: GitBranch },
 ]
 
 const BOTTOM_NAV = [

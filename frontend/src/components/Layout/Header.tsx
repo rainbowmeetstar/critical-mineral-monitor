@@ -7,6 +7,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/': '全球关键矿产风险态势',
   '/risk-forecast': '政策新闻推送',
   '/risk-forecast/prices': '矿产价格行情',
+  '/risk-deduction': '风险推演分析',
   '/minerals': '矿产数据库',
   '/companies': '矿企动态',
   '/map': '分布地图',
